@@ -2385,7 +2385,7 @@ for iso in sing_isos:
             outs=outsbool(sing_run)
             sing_run_std=sing_run[~outs].std()*2
             sing_run_m=sing_run[~outs].mean()
-            sing_run_1se_m=sing_run_1se[~outs].mean()
+            sing_run_2se_m=sing_run_1se[~outs].mean()
         
         
         if calistyle=='Calibration curve':
@@ -2418,7 +2418,7 @@ for iso in sing_isos:
                   'Run curve mean', 'Run curve 2se (mean)', 'Run curve 2sd',]   
         var_list=[cs, iso, cs_df['units'].iloc[0], expect, sing_m, sing_std, 
                   sing_rsd, sing_n, 
-                  sing_run_m, sing_run_1se_m, sing_run_std,
+                  sing_run_m, sing_run_2se_m, sing_run_std,
                   curv_m, curv_std, curv_rsd,curv_n, 
                   curv_run_m, curv_run_2se_m, curv_run_std]
         
