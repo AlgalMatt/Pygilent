@@ -289,11 +289,13 @@ def outsbool(array1, mod=1.5):
 
     array1=array1.flatten()
     x = array1[~np.isnan(array1)]
-    q75, q25 = np.percentile(x, [75 ,25])
-    iqr = q75 - q25
-    outs=((array1>iqr*mod+q75) | (array1<q25-iqr*mod))
-    
-
+    if len(x)>2:
+        q75, q25 = np.percentile(x, [75 ,25])
+        iqr = q75 - q25
+        outs=((array1>iqr*mod+q75) | (array1<q25-iqr*mod))
+    else:
+        outs=np.isnan(array1)
+        
     return outs
 
 
@@ -2396,7 +2398,7 @@ for iso in sing_isos:
                                                  cs), iso].values
             curv_run_2se_m=curv_run_1se.mean()*2
             curv_run_std=np.nan
-            if len(curv_run)>2:
+            if sum(~np.isnan(curv_run))>2:
                 outs=outsbool(curv_run)
                 curv_run_std=curv_run[~outs].std()*2
                 curv_run_m=curv_run[~outs].mean()

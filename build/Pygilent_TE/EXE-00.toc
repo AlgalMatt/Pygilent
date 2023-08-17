@@ -89,7 +89,7 @@
  [],
  False,
  False,
- 1689844388,
+ 1692276206,
  [('run.exe',
    'C:\\Users\\mdumo\\.conda\\envs\\spyder-env\\lib\\site-packages\\PyInstaller\\bootloader\\Windows-64bit\\run.exe',
    'EXECUTABLE')])
