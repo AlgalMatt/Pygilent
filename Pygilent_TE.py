@@ -1622,6 +1622,7 @@ for i, iso in enumerate(isotopes):
     if all(brkt_df.index!=iso):
         #note the missing isotopes for later
         missing[iso]=i
+        print(i)
 
 #get the calibration isotopes
 sing_isos=isotopes.copy()
@@ -1655,15 +1656,16 @@ if calistyle=='Calibration curve':
 #Ensure that all cali standards are using the same detector mode (P/A)
 #Find the P/A of the bracketing standard, remove standards from cali curve that
 #aren't the same P/A. 
+PA_bracket_bad_index={}
 if calistyle=='Calibration curve':
     PA_df_cali=PA_df.loc[calindx, :]
     for i, iso in enumerate(isotopes):   
         #The P/A of the bracketing standard       
         PAbracket=PA_df.loc[brktrows, iso]
         
-        #if more than one P/A, then only perform single point calibration
+        #if more than one P/A, then remove them from calibration
         if len(PAbracket.value_counts())>1:                       
-            missing[iso]=i
+            PA_bracket_bad_index[iso]=PAbracket.index[PAbracket!=PAbracket.value_counts().index[0]].values
             
         PA_df_cali[iso]==PAbracket.value_counts().index[0]  
         PAcounts=PA_df_cali[iso].value_counts()
@@ -2043,6 +2045,15 @@ if calistyle=='Calibration curve':
         s_array=np.array(stnd_dict[Run_df.loc[c, 'Sample Name']]).T
         stnd_array=np.append(stnd_array, s_array, axis=0)    
     stnd_df[curve_isos]=stnd_array
+    
+    
+    #Remove bracketing standards that exhibit different PA
+    
+    for iso in PA_bracket_bad_index.keys():
+        idx=np.intersect1d(stnd_df.index.values, PA_bracket_bad_index[iso])
+        if len(idx)>0:
+            stnd_df.loc[idx, iso]=np.nan
+    
     
     #make dataframes containing information from the calibration curve fit
     #including: x values, y values, r_sq, fit parameters
