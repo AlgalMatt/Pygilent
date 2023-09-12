@@ -286,7 +286,7 @@ def outsbool(array1, mod=1.5):
         outliers at the same index of array1.
 
     """
-
+    array1=np.array(array1)
     array1=array1.flatten()
     x = array1[~np.isnan(array1)]
     if len(x)>2:
@@ -361,13 +361,9 @@ def pickfig(df, xvar, title):
     window.title(title)
     
     
-    # Create a label for the dropdown menu
-    label = tk.Label(window, text="Choose an isotope")
-    label.pack(padx=10, pady=5)
-    
     # Create the dropdown menu
     dropdown_var = tk.StringVar(window)
-    dropdown_var.set(df.columns[df.columns!=xvar][0])  # Set default value
+    dropdown_var.set("Choose an isotope")  # Set default value
     dropdown = tk.OptionMenu(window, dropdown_var, *df.columns[df.columns!=xvar], 
                              command=update_y_axis)
     dropdown.pack(padx=10, pady=10)
@@ -465,13 +461,9 @@ def pickfig_cross(dfy, dfx, variables, title=None, fitted=None):
     window.title(title)
     
     
-    # Create a label for the dropdown menu
-    label = tk.Label(window, text="Choose an isotope")
-    label.pack(padx=10, pady=5)
-    
     # Create the dropdown menu
     dropdown_var = tk.StringVar(window)
-    dropdown_var.set(variables[0])  # Set default value
+    dropdown_var.set("Choose an isotope")  # Set default value
     dropdown = tk.OptionMenu(window, dropdown_var, *variables, 
                              command=update_y_axis)
     dropdown.pack(padx=10, pady=10)
@@ -616,13 +608,10 @@ def blankfigsaver(df1, df2, iso_vars, variable='CPS mean',  title='Blanks CPS',
     button_frame = tk.Frame(window)
     button_frame.pack(side=tk.TOP, padx=10, pady=10)
     
-    # Create a label for the dropdown menu
-    label = tk.Label(button_frame, text="Choose the isotope")
-    label.pack(side=tk.LEFT)
     
     # Create the dropdown menu
     dropdown_var = tk.StringVar(window)
-    dropdown_var.set(iso_vars[0])  # Set default value
+    dropdown_var.set("Choose the isotope")  # Set default value
     dropdown = tk.OptionMenu(button_frame, dropdown_var, *iso_vars, 
                              command=update_y_axis)
     dropdown.pack(side=tk.LEFT)
@@ -1051,13 +1040,10 @@ def stdfigsaver(df1, df2, title, iso_vars, expected,
     button_frame = tk.Frame(window)
     button_frame.pack(side=tk.TOP, padx=10, pady=10)
     
-    # Create a label for the dropdown menu
-    label = tk.Label(button_frame, text="Choose the isotope")
-    label.pack(side=tk.LEFT)
     
     # Create the dropdown menu
     dropdown_var = tk.StringVar(window)
-    dropdown_var.set(iso_vars[0])  # Set default value
+    dropdown_var.set("Choose the isotope")  # Set default value
     dropdown = tk.OptionMenu(button_frame, dropdown_var, *iso_vars, 
                              command=update_y_axis)
     dropdown.pack(side=tk.LEFT)
@@ -1101,6 +1087,335 @@ def stdfigsaver(df1, df2, title, iso_vars, expected,
 
 
 
+new_sample_df=repeditor(sample_df, sample_pa_df, title, table_df)
+
+
+
+
+
+
+def repeditor(df, pa, title, table_df):
+    global selected_ind, variable
+    xvar=np.arange(len(repnames))+1
+    df2=df.copy()
+    variable=df['isotope_gas'].values[0]
+    selected_ind={k: np.array([], dtype=int) for k in df['isotope_gas'].values}
+    
+    def on_pick(event):
+        global ind, selected_ind
+        ind = event.ind
+
+        newind=np.setdiff1d(ind, selected_ind[variable])
+        
+        #If the user has selected a new unselected point
+        if newind.size>0:
+            #Save the data index to the dictionary of isotopes
+            selected_ind[variable]=np.append(selected_ind[variable], newind)
+            df2.loc[variable, repnames[ind]]=np.nan
+            scatter2.set_data(xvar, df2.loc[variable, repnames])
+            hline.set_ydata([np.nanmean(df2.loc[variable,repnames]),
+                             np.nanmean(df2.loc[variable,repnames])])
+            fig.canvas.draw_idle()
+        #If the user has clicked on an already selected point    
+        else:
+            selected_ind[variable]=np.setdiff1d(selected_ind[variable], ind)
+            df2.loc[variable, repnames[ind]]=df.loc[variable, repnames[ind]]
+            scatter2.set_data(xvar, df2.loc[variable,repnames])
+            hline.set_ydata([np.nanmean(df2.loc[variable,repnames]),
+                             np.nanmean(df2.loc[variable,repnames])])
+            fig.canvas.draw_idle()
+    
+    
+ 
+    # Create the initial plot without showing the figure
+    fig, ax = plt.subplots()
+    scatter1, = ax.plot([], [], linestyle='None', marker='o', color='red', picker=5, mec='r')
+    scatter2, = ax.plot([], [], linestyle='None', marker='o', color='blue', mec='b')
+    scatter_outs, = ax.plot([], [], linestyle='None', marker='o', 
+                            mfc='none', mec='r', mew=1)
+    hline=ax.axhline(y=0, ls='--', color='black')
+    PA_annotate_ls=[ax.text(0, 0, [], fontsize=12, ha='right', va='bottom') 
+                    for rep in repnames]
+    
+    ax.set_xlabel('Replicate number')
+    ax.set_ylabel(variable)
+    ax.legend(['Remove', 'Keep', 'Recommend (outlier)', 'Mean'])
+    
+    # Register the pick event
+    fig.canvas.mpl_connect('pick_event', on_pick)
+    
+    plt.close(fig)  # Close the figure to prevent it from being displayed
+    # Define the update function for the dropdown
+    def update_y_axis(*args):
+        global variable
+        variable = dropdown_var.get()
+        
+        #Show the recommended outliers for removal
+        outs=outsbool(df.loc[variable, repnames].astype(float), mod=outmod)
+        
+        
+        scatter1.set_data(xvar, df.loc[variable, repnames])
+        scatter2.set_data(xvar, df2.loc[variable, repnames])
+        scatter_outs.set_data(xvar[outs], df2.loc[variable, repnames[outs]])
+        hline.set_ydata([np.nanmean(df2.loc[variable, repnames]),
+                         np.nanmean(df2.loc[variable, repnames])])
+        
+        for i, txt in enumerate(PA_annotate_ls):
+            txt.set_position((xvar[i], df.loc[variable, repnames[i]].astype(float)))
+            PA_text=pa.loc[variable, repnames[i]]
+            txt.set_text(PA_text)
+        
+        ax.set_ylabel(variable)
+        ax.relim()
+        ax.autoscale_view()
+        fig.canvas.draw_idle()
+    
+    # Create the Tkinter window
+    window = tk.Tk()
+    window.title(title)
+    
+    plot_frame = ttk.Frame(window)
+    plot_frame.grid(row=0, column=0, sticky='nsew')
+    
+    table_frame = ttk.Frame(window)
+    table_frame.grid(row=0, column=1, sticky='nsew')
+    
+        # Create a treeview widget for the table
+    table = ttk.Treeview(table_frame, columns=('Name', 'Age'), show='headings')
+    table.heading('Name', text='Name')
+    table.heading('Age', text='Age')
+
+    # Insert data into the table
+    for index, row in table_df.iterrows():
+        table.insert('', 'end', values=(row['Name'], row['Age']))
+
+    # Pack the table
+    table.pack(expand=tk.YES, fill=tk.BOTH)
+
+    # Configure grid weights to make the frames resizable
+    window.grid_rowconfigure(0, weight=1)
+    window.grid_columnconfigure(0, weight=1)
+    window.grid_columnconfigure(1, weight=1)
+    
+    
+    vsb = ttk.Scrollbar(table_frame, orient="vertical", command=table.yview)
+    vsb.pack(side='right', fill='y')
+    table.configure(yscrollcommand=vsb.set)
+    
+    
+    
+    # Create the dropdown menu
+    dropdown_var = tk.StringVar(plot_frame)
+    dropdown_var.set('Choose an isotope')  
+    dropdown = tk.OptionMenu(plot_frame, dropdown_var, *df['isotope_gas'].values, 
+                             command=update_y_axis)
+    dropdown.pack(padx=10, pady=10)
+    
+    
+    submit_button = tk.Button(plot_frame, text="Submit", 
+                              command=lambda: window.destroy())
+    submit_button.pack( side = tk.BOTTOM)
+
+
+    # Create the FigureCanvasTkAgg object
+    canvas = FigureCanvasTkAgg(fig, master=plot_frame)
+    canvas.draw()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+    
+    # Run the Tkinter event loop
+    window.mainloop()
+    
+    
+    return df2
+
+
+
+
+
+
+
+
+def repeditor(df, pa, title):
+    global selected_ind, variable
+    xvar=np.arange(len(repnames))+1
+    df2=df.copy()
+    variable=df['isotope_gas'].values[0]
+    selected_ind={k: np.array([], dtype=int) for k in df['isotope_gas'].values}
+    
+    def on_pick(event):
+        global ind, selected_ind
+        ind = event.ind
+
+        newind=np.setdiff1d(ind, selected_ind[variable])
+        
+        #If the user has selected a new unselected point
+        if newind.size>0:
+            #Save the data index to the dictionary of isotopes
+            selected_ind[variable]=np.append(selected_ind[variable], newind)
+            df2.loc[variable, repnames[ind]]=np.nan
+            scatter2.set_data(xvar, df2.loc[variable, repnames])
+            hline.set_ydata([np.nanmean(df2.loc[variable,repnames]),
+                             np.nanmean(df2.loc[variable,repnames])])
+            fig.canvas.draw_idle()
+        #If the user has clicked on an already selected point    
+        else:
+            selected_ind[variable]=np.setdiff1d(selected_ind[variable], ind)
+            df2.loc[variable, repnames[ind]]=df.loc[variable, repnames[ind]]
+            scatter2.set_data(xvar, df2.loc[variable,repnames])
+            hline.set_ydata([np.nanmean(df2.loc[variable,repnames]),
+                             np.nanmean(df2.loc[variable,repnames])])
+            fig.canvas.draw_idle()
+    
+    
+ 
+    # Create the initial plot without showing the figure
+    fig, ax = plt.subplots()
+    scatter1, = ax.plot([], [], linestyle='None', marker='o', color='red', picker=5, mec='r')
+    scatter2, = ax.plot([], [], linestyle='None', marker='o', color='blue', mec='b')
+    scatter_outs, = ax.plot([], [], linestyle='None', marker='o', 
+                            mfc='none', mec='r', mew=1)
+    hline=ax.axhline(y=0, ls='--', color='black')
+    PA_annotate_ls=[ax.text(0, 0, [], fontsize=12, ha='right', va='bottom') 
+                    for rep in repnames]
+    
+    ax.set_xlabel('Replicate number')
+    ax.set_ylabel(variable)
+    ax.legend(['Remove', 'Keep', 'Recommend (outlier)', 'Mean'])
+    
+    # Register the pick event
+    fig.canvas.mpl_connect('pick_event', on_pick)
+    
+    plt.close(fig)  # Close the figure to prevent it from being displayed
+    # Define the update function for the dropdown
+    def update_y_axis(*args):
+        global variable
+        variable = dropdown_var.get()
+        
+        #Show the recommended outliers for removal
+        outs=outsbool(df.loc[variable, repnames].astype(float), mod=outmod)
+        
+        
+        scatter1.set_data(xvar, df.loc[variable, repnames])
+        scatter2.set_data(xvar, df2.loc[variable, repnames])
+        scatter_outs.set_data(xvar[outs], df2.loc[variable, repnames[outs]])
+        hline.set_ydata([np.nanmean(df2.loc[variable, repnames]),
+                         np.nanmean(df2.loc[variable, repnames])])
+        
+        for i, txt in enumerate(PA_annotate_ls):
+            txt.set_position((xvar[i], df.loc[variable, repnames[i]].astype(float)))
+            PA_text=pa.loc[variable, repnames[i]]
+            txt.set_text(PA_text)
+        
+        ax.set_ylabel(variable)
+        ax.relim()
+        ax.autoscale_view()
+        fig.canvas.draw_idle()
+    
+    # Create the Tkinter window
+    window = tk.Tk()
+    window.title(title)
+    
+    
+    # Create the dropdown menu
+    dropdown_var = tk.StringVar(window)
+    dropdown_var.set('Choose an isotope')  
+    dropdown = tk.OptionMenu(window, dropdown_var, *df['isotope_gas'].values, 
+                             command=update_y_axis)
+    dropdown.pack(padx=10, pady=10)
+    
+    
+    submit_button = tk.Button(window, text="Submit", 
+                              command=lambda: window.destroy())
+    submit_button.pack( side = tk.BOTTOM)
+
+    
+    # Create the FigureCanvasTkAgg object
+    canvas = FigureCanvasTkAgg(fig, master=window)
+    canvas.draw()
+    canvas.get_tk_widget().pack()
+    
+    # Run the Tkinter event loop
+    window.mainloop()
+    
+    
+    return df2
+
+
+
+
+
+
+
+
+
+
+
+def display_dataframe_with_option(df):
+    df.reset_index(inplace=True)
+    result = None  # Initialize result variable
+    
+    def yes_clicked():
+        nonlocal result  # Use nonlocal to modify the outer variable
+        result = True
+        root.destroy()
+    
+    def no_clicked():
+        nonlocal result  # Use nonlocal to modify the outer variable
+        result = False
+        root.destroy()
+
+    # Create the main window
+    root = tk.Tk()
+    root.title("DataFrame Viewer")
+
+    # Create a Treeview widget
+    tree = ttk.Treeview(root)
+
+    # Define columns based on DataFrame columns
+    tree['columns'] = list(df.columns)
+
+    # Set column headings
+    for col in df.columns:
+        #Find the width of the columns so that they can be adjusted to fit
+        max_len = max(df[col].astype(str).apply(len).max(), len(col))
+        tree.column(col, width=max_len * 10)  # Adjust the factor (10) as needed for proper sizing
+        tree.heading(col, text=col, command=lambda c=col: sortby(tree, c, 0))
+
+    # Create vertical scrollbar
+    vsb = ttk.Scrollbar(root, orient="vertical", command=tree.yview)
+    vsb.pack(side='right', fill='y')
+    tree.configure(yscrollcommand=vsb.set)
+
+    # Create horizontal scrollbar
+    hsb = ttk.Scrollbar(root, orient="horizontal", command=tree.xview)
+    hsb.pack(side='bottom', fill='x')
+    tree.configure(xscrollcommand=hsb.set)
+
+    # Insert data from DataFrame
+    for index, row in df.iterrows():
+        tree.insert(parent='', index='end', iid=index, text=index, values=list(row))
+
+    # Pack the Treeview widget
+    tree.pack()
+
+    # Create label
+    label = ttk.Label(root, text="Automatically remove P/A outliers?")
+    label.pack(pady=5)
+
+    # Create a frame to contain the buttons
+    button_frame = ttk.Frame(root)
+    button_frame.pack(pady=5)
+    
+    # Create 'Yes' and 'No' buttons
+    yes_button = ttk.Button(button_frame, text='Yes', command=yes_clicked)
+    yes_button.pack(side='left', padx=10)
+    no_button = ttk.Button(button_frame, text='No', command=no_clicked)
+    no_button.pack(side='left', padx=10)
+
+    # Start the tkinter main loop
+    root.mainloop()
+    
+    return result  # Return the result after the window is destroyed
 
 
 
@@ -1285,7 +1600,7 @@ for i, folder in enumerate(batch_t['Sample Folder']):
             gas_df['PA']=gas_df.iloc[:, idx]
             #Concat all gas modes of this repeat
             allgas_df=pd.concat([allgas_df, gas_df], ignore_index=True)
-        #extract cps, PA and stdev info from all gas modes of this repeat
+        #extract cps and PA from all gas modes
         listCPS.append((np.array(allgas_df['CPS']))) 
         listPA.append((np.array(allgas_df['PA'])))
         
@@ -1294,20 +1609,20 @@ for i, folder in enumerate(batch_t['Sample Folder']):
     isotopes=np.array(allgas_df['Isotope_gas'])    
     Gasmodes=np.array(allgas_df['Gas mode']) 
     
-    #Create nested list of CPS, PA and stdev replicates
+    #Create nested list of CPS and PA replicates
     repCPS=[list(s) for s in np.vstack(listCPS).T]
     repPA=[list(s) for s in np.vstack(listPA).T]
     
-               
+
     #Form above lists into df
     repCPS_df=pd.DataFrame([repCPS], columns=isotopes)
     repPA_df=pd.DataFrame([repPA], columns=isotopes)
-   # repSD_df=pd.DataFrame([repSD], columns=isotopes)
+
         
     #Concatenate all samples
     repCPS_all_df=pd.concat([repCPS_all_df, repCPS_df], ignore_index=True)       
     repPA_all_df=pd.concat([repPA_all_df, repPA_df], ignore_index=True)  
-    #repSD_all_df=pd.concat([repSD_all_df, repSD_df], ignore_index=True) 
+
             
 
 #close the progress bar
@@ -1315,7 +1630,128 @@ root.destroy()
 
 # Add in the info    
 repCPS_all_df=pd.concat([Run_df, repCPS_all_df], axis=1)            
-repPA_all_df=pd.concat([Run_df, repPA_all_df], axis=1)                 
+repPA_all_df=pd.concat([Run_df, repPA_all_df], axis=1)    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Open the replicate editor?
+options = {'icon': 'question', 'type': 'yesno', 'default': 'no'}
+answer = tk.messagebox.askyesno(title=None, 
+                                message='Open replicate editor? (Recommended: No)', **options)
+
+if answer:
+    #Make a long dataframe with a column for each rep
+    
+    #reshape the replicates to make one column for each
+    rep_CPS_arr=np.array(repCPS_all_df[isotopes].values.tolist())
+    rep_CPS_arr_reshaped=np.reshape(rep_CPS_arr, (-1, numrepeats))
+    
+    repPA_arr=np.array(repPA_all_df[isotopes].values.tolist()) 
+    repPA_arr_reshaped=np.reshape(repPA_arr, (-1, numrepeats))
+    
+    s_names=[y for x in Run_df['Sample Name'].values for y in [x]*len(isotopes)]
+    s_idx=[y for x in np.arange(len(repCPS_all_df)) for y in [x]*len(isotopes)]
+    
+    s_isos=[]
+    for i in range(len(Run_df)):
+        s_isos.extend(isotopes)
+    
+    
+    rep_num=[numrepeats]*len(s_idx)
+    run_long_df=pd.DataFrame(list(zip(s_idx, s_names, rep_num, s_isos)), 
+                             columns=['run_order', 'sample_name', 'rep_num', 'isotope_gas'])
+    #rep col names
+    repnames=np.array([f"rep_{i}" for i in np.arange(numrepeats)+1])
+    rep_cps_long_df=pd.concat([run_long_df, 
+                               pd.DataFrame(rep_CPS_arr_reshaped, columns=repnames)], axis=1)
+    rep_PA_long_df=pd.concat([run_long_df, 
+                               pd.DataFrame(repPA_arr_reshaped, columns=repnames)], axis=1)
+
+    
+    
+    
+    #Remove the same rep(s) from all samples?
+    answer = tk.messagebox.askyesno(title=None, 
+                                message='Do you want to remove the same replicate from all samples?', 
+                                **options)
+    if answer:
+        #Select which reps to remove
+        rep_edit_idx=fancycheckbox(repnames, 
+                                   title=("Select the replicate(s) you want to remove (FROM ALL SAMPLES)")) 
+        numrepeats-=len(rep_edit_idx)
+        if len(rep_edit_idx)>0:
+            #Remove the reps from all samples
+            #rep_cps_long_df.drop(labels=np.array(repnames)[rep_edit_idx], axis=1, inplace=True)
+            #rep_PA_long_df.drop(labels=np.array(repnames)[rep_edit_idx], axis=1, inplace=True)
+            rep_cps_long_df[repnames[rep_edit_idx]]=np.nan
+            rep_cps_long_df['n']-=len(rep_edit_idx)
+            rep_PA_long_df[repnames[rep_edit_idx]]=np.nan
+            rep_PA_long_df['n']-=len(rep_edit_idx)
+            
+    
+    #P/A outlier removal
+    pa_outliers=np.array(rep_PA_long_df[repnames].apply(lambda x: 
+        x.values!=x.value_counts().index[0], axis=1).tolist())
+
+    # Display the P/A outliers and ask whether to auto remove?
+    answer=display_dataframe_with_option(rep_PA_long_df.loc[pa_outliers])
+    
+    if answer:
+        #Automatically remove P/A outlers
+        rep_cps_long_df[repnames] = np.where(pa_outliers, np.nan, rep_cps_long_df[repnames])
+        rep_cps_long_df['rep_num']-=np.isnan(rep_cps_long_df[repnames]).sum(axis=1)
+        rep_PA_long_df[repnames] = np.where(pa_outliers, np.nan, rep_PA_long_df[repnames])
+        rep_PA_long_df['rep_num']-=np.isnan(rep_PA_long_df[repnames]).sum(axis=1)
+    
+    
+    
+    #CPS outliers
+    #Set to mod = 7 arbitrarily to only highlight very clear outliers (normally use mod=1.5)
+    outmod=7
+    cps_outliers=np.array(rep_cps_long_df[repnames].apply(outsbool, mod=outmod, axis=1).tolist())
+    
+    cps_outlier_samples=rep_cps_long_df.loc[np.any(cps_outliers, axis=1)]
+    
+    cps_outlier_samples_short=unique(cps_outlier_samples['run_order'].values)
+    out_defaults=np.array([False]*len(Run_df))
+    out_defaults[cps_outlier_samples_short]=True
+    
+    sample_edit_idx=fancycheckbox(repCPS_all_df['Sample Name'].values, defaults=out_defaults , 
+                  title=("Select the samples from which you want to edit replicates"))
+    
+    #cycle through each sample and edit
+    for id in sample_edit_idx:
+        sample_df=rep_cps_long_df.loc[rep_cps_long_df['run_order']==id]
+        sample_pa_df=rep_PA_long_df.loc[rep_PA_long_df['run_order']==id]
+        
+        title=str(id)+': '+repCPS_all_df.loc[id, 'Sample Name']
+        
+        sample_df.loc[:, 'old_index']=sample_df.index.values
+        sample_pa_df.loc[:, 'old_index']=sample_pa_df.index.values
+        
+        sample_df=sample_df.set_index('isotope_gas', drop=False)
+        sample_pa_df=sample_pa_df.set_index('isotope_gas', drop=False)
+        
+        new_sample_df=repeditor(sample_df, sample_pa_df, title)
+        
+        repCPS_all_df.loc[id, isotopes]=new_sample_df.values.T.tolist()
+        
+        
+        
+
+
+
 
 #Create means and stdevs.
 CPSmean=np.array([])
