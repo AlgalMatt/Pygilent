@@ -1293,7 +1293,23 @@ def repeditor(df, pa, title, table_df, id):
     return df2
 
 
-
+def ratioel_rep_removal(df):
+    out_idx=np.any(np.isnan(df[repnames]), axis=1)
+    out_iso=rep_cps_long_df.loc[out_idx, 'isotope_gas']
+    if np.any(np.isin(out_iso, list(ratioels.values()))):
+        ratioel_out_idx=out_iso.loc[np.isin(out_iso, list(ratioels.values()))].index
+        for i in ratioel_out_idx:
+            out_ratio_el=df.loc[i, 'isotope_gas']
+            out_gasmode=Gasmodes[i%len(isotopes)]
+            isos_in_gasmode=isotopes[Gasmodes==out_gasmode]
+            idx=(np.isin(df['isotope_gas'], isos_in_gasmode)
+                    &(df['run_order']==df.loc[i, 'run_order']))
+            
+            out_array=np.array([list(pa_outliers[i, :])]*len(isos_in_gasmode))
+            
+            df.loc[idx, repnames]= np.where(out_array, np.nan, df.loc[idx, repnames])
+    
+    return df
 
 
 
@@ -1590,7 +1606,40 @@ repPA_all_df=pd.concat([Run_df, repPA_all_df], axis=1)
 
 
 
-#Open the replicate editor?
+
+
+####Select the ratio element
+#iterate through gas modes to select each ratio element and store as dict
+ratioels={}
+isotopes_bygas={}
+isotopes_bygas_element={}
+for gas in unique(Gasmodes):
+    gasels=isotopes[Gasmodes==gas]
+    #Use Ca48 by default, second preference is Ca43
+    ratioel_default=contains1d(gasels, 'Ca48')   
+    if sum(ratioel_default)<1:
+        ratioel_default=contains1d(gasels, 'Ca43')
+    
+    #User select the ratio isotope
+    ratioel=gasels[fancycheckbox(gasels, defaults=ratioel_default, 
+                                 single=True, title=("Select ratio isotope"
+                                                     ))][0]
+    #dict of ratio elements
+    ratioels[gas]=ratioel
+    #dict of measured full isotope names
+    isotopes_bygas[gas]=gasels
+    #dict of measured isotope names as element only (no mas or gas mode)
+    #This is for referencing with the stndvals_df.
+    isotopes_bygas_element[gas]=[
+        s.split('_')[0].strip('1234567890') for s in gasels] 
+  
+
+
+
+
+
+
+########Open the replicate editor?
 options = {'icon': 'question', 'type': 'yesno', 'default': 'no'}
 answer = tk.messagebox.askyesno(title=None, 
                                 message='Open replicate editor? (Recommended: No)', **options)
@@ -1645,7 +1694,7 @@ if answer:
             rep_PA_long_df['n']-=len(rep_edit_idx)
             
     
-    #P/A outlier removal
+    #P/A outlier determination
     pa_outliers=np.array(rep_PA_long_df[repnames].apply(lambda x: 
         x.values!=x.value_counts().index[0], axis=1).tolist())
 
@@ -1653,11 +1702,15 @@ if answer:
     answer=display_dataframe_with_option(rep_PA_long_df.loc[pa_outliers])
     
     if answer:
+        #Are any of the outliers the ratio element? 
+        #If so, must remove that rep from all isotopes in that sample
+            
         #Automatically remove P/A outlers
         rep_cps_long_df[repnames] = np.where(pa_outliers, np.nan, rep_cps_long_df[repnames])
+        rep_cps_long_df=ratioel_rep_removal(rep_cps_long_df)
         rep_cps_long_df['rep_num']-=np.isnan(rep_cps_long_df[repnames]).sum(axis=1)
         rep_PA_long_df[repnames] = np.where(pa_outliers, np.nan, rep_PA_long_df[repnames])
-        rep_PA_long_df['rep_num']-=np.isnan(rep_PA_long_df[repnames]).sum(axis=1)
+        rep_PA_long_df['rep_num']-=pd.isna(rep_PA_long_df[repnames]).sum(axis=1)
     
     
     
@@ -1717,17 +1770,17 @@ if answer:
         rep_cps_long_df.loc[new_sample_df.index]=new_sample_df.copy()
         
 
-rep_cps_long_df['rep_num']=(rep_cps_long_df['rep_num']
-                            -np.sum(np.isnan(rep_cps_long_df[repnames]), axis=1))
 
+#Are any of the outliers the ratio element? 
+#If so, must remove that rep from all isotopes in that sample
+rep_cps_long_df=ratioel_rep_removal(rep_cps_long_df)
+
+rep_cps_long_df['rep_num']=(numrepeats-np.sum(np.isnan(rep_cps_long_df[repnames]), axis=1))
 rep_cps_long_df['rep_list']=rep_cps_long_df[repnames].apply(list, axis=1)
 
 
-
-
-
 #Create means and stdevs.
-rep_cps_long_df['cps_mean']=np.namean(rep_cps_long_df[repnames], axis=1)
+rep_cps_long_df['cps_mean']=np.nanmean(rep_cps_long_df[repnames], axis=1)
 rep_cps_long_df['cps_std']=np.nanstd(rep_cps_long_df[repnames], axis=1, ddof=1)
 CPSmean_df=pd.pivot_table(rep_cps_long_df, values='cps_mean', index='run_order'
                           , columns=['isotope_gas'], sort=False)
@@ -1746,11 +1799,14 @@ reps_pivoted_sorted = rep_cps_long_df.pivot(index='run_order', columns=['isotope
                         values='rep_list')
 repCPS_all_df[isotopes]=reps_pivoted_sorted[isotopes]
 
-#Create average P/A table
+#####Create average P/A table
+#make sure any reps chosen in the rep editor are assigned as nan in PA df
 mask=np.isnan(rep_cps_long_df[repnames])
 rep_PA_long_df[repnames] = np.where(mask, np.nan, rep_PA_long_df[repnames])
-rep_PA_long_df['PA_all_digi'] = np.nanmean(rep_PA_long_df[repnames]=='P', axis=1)
-rep_PA_long_df['PA_all']='M'
+rep_PA_long_df['rep_num']=rep_cps_long_df['rep_num']
+
+rep_PA_long_df['PA_all_digi'] = (np.nansum(rep_PA_long_df[repnames]=='P', axis=1)
+                                 /rep_PA_long_df['rep_num'])
 PA_digi_df=pd.pivot_table(rep_PA_long_df, values='PA_all_digi', index='run_order'
                           , columns=['isotope_gas'], sort=False)
 PA_df=PA_digi_df.copy()
@@ -1768,12 +1824,6 @@ n_df=pd.pivot_table(rep_cps_long_df, values='rep_num', index='run_order'
                           , columns=['isotope_gas'], sort=False)
 n_df.reset_index(inplace=True)
 n_df=pd.concat([Run_df, n_df], axis=1)
-
-
-
-
-
-
 
 
 
@@ -1914,30 +1964,10 @@ debrkt=pickfig(cpsbrkt, 'Elapse',
 brktrows=brktrows[~np.in1d(brktrows, debrkt)]
 
 
-
-#iterate through gas modes to select each ratio element and store as dict
-ratioels={}
-isotopes_bygas={}
-isotopes_bygas_element={}
-for gas in unique(Gasmodes):
-    gasels=isotopes[Gasmodes==gas]
-    #Use Ca48 by default, second preference is Ca43
-    ratioel_default=contains1d(gasels, 'Ca48')   
-    if sum(ratioel_default)<1:
-        ratioel_default=contains1d(gasels, 'Ca43')
+  
     
-    #User select the ratio isotope
-    ratioel=gasels[fancycheckbox(gasels, defaults=ratioel_default, 
-                                 single=True, title=("Select ratio isotope"
-                                                     ))][0]
-    #dict of ratio elements
-    ratioels[gas]=ratioel
-    #dict of measured full isotope names
-    isotopes_bygas[gas]=gasels
-    #dict of measured isotope names as element only (no mas or gas mode)
-    #This is for referencing with the stndvals_df.
-    isotopes_bygas_element[gas]=[
-        s.split('_')[0].strip('1234567890') for s in gasels] 
+    
+    
     
 #Select calibration method
 calistyle_list=['Single-point', 'Calibration curve']
