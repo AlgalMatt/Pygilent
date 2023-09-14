@@ -1,0 +1,6 @@
+#Ignore the dist directory
+dist/
+#Ignore the build directory
+build/
+#Ignore csv files
+*.csv

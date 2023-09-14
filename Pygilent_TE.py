@@ -247,7 +247,7 @@ def textinputbox(title=""):
     #The title of the window
     label=tk.Label(root, text=title, font=("Helvetica", 14))
     label.grid(row=0, column=0, pady=5)
-    
+    root.title(title)
     #Button function that saves input value and closes the window
     def retrieve_input():
         global inputValue
@@ -286,7 +286,7 @@ def outsbool(array1, mod=1.5):
         outliers at the same index of array1.
 
     """
-
+    array1=np.array(array1, dtype=float)
     array1=array1.flatten()
     x = array1[~np.isnan(array1)]
     if len(x)>2:
@@ -297,7 +297,6 @@ def outsbool(array1, mod=1.5):
         outs=np.isnan(array1)
         
     return outs
-
 
 
 
@@ -361,13 +360,9 @@ def pickfig(df, xvar, title):
     window.title(title)
     
     
-    # Create a label for the dropdown menu
-    label = tk.Label(window, text="Choose an isotope")
-    label.pack(padx=10, pady=5)
-    
     # Create the dropdown menu
     dropdown_var = tk.StringVar(window)
-    dropdown_var.set(df.columns[df.columns!=xvar][0])  # Set default value
+    dropdown_var.set("Choose an isotope")  # Set default value
     dropdown = tk.OptionMenu(window, dropdown_var, *df.columns[df.columns!=xvar], 
                              command=update_y_axis)
     dropdown.pack(padx=10, pady=10)
@@ -465,13 +460,9 @@ def pickfig_cross(dfy, dfx, variables, title=None, fitted=None):
     window.title(title)
     
     
-    # Create a label for the dropdown menu
-    label = tk.Label(window, text="Choose an isotope")
-    label.pack(padx=10, pady=5)
-    
     # Create the dropdown menu
     dropdown_var = tk.StringVar(window)
-    dropdown_var.set(variables[0])  # Set default value
+    dropdown_var.set("Choose an isotope")  # Set default value
     dropdown = tk.OptionMenu(window, dropdown_var, *variables, 
                              command=update_y_axis)
     dropdown.pack(padx=10, pady=10)
@@ -616,13 +607,10 @@ def blankfigsaver(df1, df2, iso_vars, variable='CPS mean',  title='Blanks CPS',
     button_frame = tk.Frame(window)
     button_frame.pack(side=tk.TOP, padx=10, pady=10)
     
-    # Create a label for the dropdown menu
-    label = tk.Label(button_frame, text="Choose the isotope")
-    label.pack(side=tk.LEFT)
     
     # Create the dropdown menu
     dropdown_var = tk.StringVar(window)
-    dropdown_var.set(iso_vars[0])  # Set default value
+    dropdown_var.set("Choose the isotope")  # Set default value
     dropdown = tk.OptionMenu(button_frame, dropdown_var, *iso_vars, 
                              command=update_y_axis)
     dropdown.pack(side=tk.LEFT)
@@ -1051,13 +1039,10 @@ def stdfigsaver(df1, df2, title, iso_vars, expected,
     button_frame = tk.Frame(window)
     button_frame.pack(side=tk.TOP, padx=10, pady=10)
     
-    # Create a label for the dropdown menu
-    label = tk.Label(button_frame, text="Choose the isotope")
-    label.pack(side=tk.LEFT)
     
     # Create the dropdown menu
     dropdown_var = tk.StringVar(window)
-    dropdown_var.set(iso_vars[0])  # Set default value
+    dropdown_var.set("Choose the isotope")  # Set default value
     dropdown = tk.OptionMenu(button_frame, dropdown_var, *iso_vars, 
                              command=update_y_axis)
     dropdown.pack(side=tk.LEFT)
@@ -1075,9 +1060,6 @@ def stdfigsaver(df1, df2, title, iso_vars, expected,
     canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, ipady=20)
     
     
-    
-    
-    
     Save_button = tk.Button(button_frame2, text="Save", 
                               command=saveonefig)
     SaveAll_button = tk.Button(button_frame2, text="Save all", 
@@ -1093,7 +1075,6 @@ def stdfigsaver(df1, df2, title, iso_vars, expected,
     #progress bar
     progressbar = ttk.Progressbar(window, orient=tk.HORIZONTAL, length=400)
     progressbar.pack(side=tk.BOTTOM)
-  
     
     # Run the Tkinter event loop
     window.mainloop()
@@ -1102,6 +1083,310 @@ def stdfigsaver(df1, df2, title, iso_vars, expected,
 
 
 
+
+def repeditor(df, pa, title, table_df, id):
+    global selected_ind, variable
+    xvar=np.arange(len(repnames))+1
+    df2=df.copy()
+    variable=df['isotope_gas'].values[0]
+    selected_ind={k: np.array([], dtype=int) for k in df['isotope_gas'].values}
+    
+    def on_pick(event):
+        global ind, selected_ind
+        ind = event.ind
+
+        newind=np.setdiff1d(ind, selected_ind[variable])
+        
+        #If the user has selected a new unselected point
+        if newind.size>0:
+            #Save the data index to the dictionary of isotopes
+            selected_ind[variable]=np.append(selected_ind[variable], newind)
+            df2.loc[variable, repnames[ind]]=np.nan
+            scatter2.set_data(xvar, df2.loc[variable, repnames])
+            hline.set_ydata([np.nanmean(df2.loc[variable,repnames]),
+                             np.nanmean(df2.loc[variable,repnames])])
+            fig.canvas.draw_idle()
+        #If the user has clicked on an already selected point    
+        else:
+            selected_ind[variable]=np.setdiff1d(selected_ind[variable], ind)
+            df2.loc[variable, repnames[ind]]=df.loc[variable, repnames[ind]]
+            scatter2.set_data(xvar, df2.loc[variable,repnames])
+            hline.set_ydata([np.nanmean(df2.loc[variable,repnames]),
+                             np.nanmean(df2.loc[variable,repnames])])
+            fig.canvas.draw_idle()
+    
+    
+ 
+    # Create the initial plot without showing the figure
+    fig, ax = plt.subplots()
+    scatter1, = ax.plot([], [], linestyle='None', marker='o', color='red', picker=5, mec='r')
+    scatter2, = ax.plot([], [], linestyle='None', marker='o', color='blue', mec='b')
+    scatter_outs, = ax.plot([], [], linestyle='None', marker='o', 
+                            mfc='none', mec='r', mew=1)
+    hline=ax.axhline(y=0, ls='--', color='black')
+    PA_annotate_ls=[ax.text(0, 0, [], fontsize=12, ha='right', va='bottom') 
+                    for rep in repnames]
+    
+    ax.set_xlabel('Replicate number')
+    ax.set_ylabel(variable)
+    ax.legend(['Remove', 'Keep', 'Recommend (outlier)', 'Mean'])
+    
+    # Register the pick event
+    fig.canvas.mpl_connect('pick_event', on_pick)
+    
+    plt.close(fig)  # Close the figure to prevent it from being displayed
+    
+    
+    
+    # Define the update function for the dropdown
+    def update_y_axis(*args):
+        global variable
+        variable = dropdown_var.get()
+        
+        #Show the recommended outliers for removal
+        outs=outsbool(df.loc[variable, repnames].astype(float), mod=outmod)
+        
+        
+        scatter1.set_data(xvar, df.loc[variable, repnames])
+        scatter2.set_data(xvar, df2.loc[variable, repnames])
+        scatter_outs.set_data(xvar[outs], df2.loc[variable, repnames[outs]])
+        hline.set_ydata([np.nanmean(df2.loc[variable, repnames]),
+                         np.nanmean(df2.loc[variable, repnames])])
+        
+        for i, txt in enumerate(PA_annotate_ls):
+            txt.set_position((xvar[i], df.loc[variable, repnames[i]].astype(float)))
+            PA_text=pa.loc[variable, repnames[i]]
+            txt.set_text(PA_text)
+        
+        ax.set_ylabel(variable)
+        ax.relim()
+        ax.autoscale_view()
+        fig.canvas.draw_idle()
+        
+        new_PA_run_df=repPA_all_df[['Sample Name', variable]].copy()
+        new_PA_run_df.insert(0, 'Index', np.arange(len(repPA_all_df)))
+        
+        #Change the 2nd table contents
+        for iid in list(PA_run_table.get_children()):
+            PA_run_table.delete(iid)
+        
+        PA_run_table.heading(col, text=col)
+        
+        for index, row in new_PA_run_df.iterrows():
+            if index==id:
+                PA_run_table.insert(parent='', index='end', 
+                                    iid=index, values=list(row), tags='sample') 
+            else:
+                PA_run_table.insert(parent='', index='end', iid=index, values=list(row))
+        PA_run_table.tag_configure('sample', background='yellow')
+        
+        
+        
+    
+    # Create the Tkinter window
+    window = tk.Tk()
+    window.title(title)
+    
+    #Keep the window at the front of other apps.
+    window.lift()
+    window.attributes("-topmost", True)
+    
+    plot_frame = ttk.Frame(window)
+    plot_frame.grid(row=0, column=0, sticky='nsew', rowspan=2)
+    
+    table_frame = ttk.Frame(window)
+    table_frame.grid(row=0, column=1, sticky='new')
+    
+    table_2_frame = ttk.Frame(window)
+    table_2_frame.grid(row=1, column=1, sticky='sew')    
+    
+    
+        # Create a treeview widget for the table
+    outlier_table = ttk.Treeview(table_frame, columns=table_df.columns, show='headings')
+    
+        # Define columns based on DataFrame columns
+    outlier_table['columns'] = list(table_df.columns)
+
+    # Set column headings
+    for col in table_df.columns:
+        outlier_table.heading(col, text=col)
+    
+    # Insert data from DataFrame
+    for index, row in table_df.iterrows():
+        outlier_table.insert(parent='', index='end', iid=index, values=list(row))
+
+    # Pack the table
+    outlier_table.pack(expand=tk.YES, fill=tk.BOTH)
+    
+    vsb = ttk.Scrollbar(table_frame, orient="vertical", command=outlier_table.yview)
+    vsb.pack(side='right', fill='y')
+    outlier_table.configure(yscrollcommand=vsb.set)
+    
+    #Start table
+    
+    PA_template_df=pd.DataFrame({'Index': np.arange(len(repPA_all_df)), 
+                                 'Sample Name': repPA_all_df['Sample Name'].values, 
+                                    'Isotope': np.array(['']*len(repPA_all_df))})
+
+    
+        # Create a treeview widget for the table
+    PA_run_table = ttk.Treeview(table_2_frame, columns=PA_template_df.columns, show='headings')
+    
+        # Define columns based on DataFrame columns
+    PA_run_table['columns'] = list(PA_template_df.columns)
+
+    # Set column headings
+    for col in PA_template_df.columns:
+        PA_run_table.heading(col, text=col)
+    
+    # Insert data from DataFrame
+    for index, row in PA_template_df.iterrows():
+        if index==id:
+            PA_run_table.insert(parent='', index='end', 
+                                iid=index, values=list(row), tags='sample') 
+        else:
+            PA_run_table.insert(parent='', index='end', iid=index, values=list(row))
+    PA_run_table.tag_configure('sample', background='yellow')
+
+    # Pack the table
+    PA_run_table.pack(expand=tk.YES, fill=tk.BOTH)
+    
+    vsb = ttk.Scrollbar(table_2_frame, orient="vertical", command=PA_run_table.yview)
+    vsb.pack(side='right', fill='y')
+    PA_run_table.configure(yscrollcommand=vsb.set)
+    
+
+    # Configure grid weights to make the frames resizable
+    window.grid_rowconfigure(0, weight=1)
+    window.grid_rowconfigure(1, weight=1)
+    window.grid_columnconfigure(0, weight=1)
+    window.grid_columnconfigure(1, weight=1)
+    
+    
+    
+    
+    
+    
+    # Create the dropdown menu
+    dropdown_var = tk.StringVar(plot_frame)
+    dropdown_var.set('Choose an isotope')  
+    dropdown = tk.OptionMenu(plot_frame, dropdown_var, *df['isotope_gas'].values, 
+                             command=update_y_axis)
+    dropdown.pack(padx=10, pady=10)
+    
+    
+    submit_button = tk.Button(plot_frame, text="Submit", 
+                              command=lambda: window.destroy())
+    submit_button.pack( side = tk.BOTTOM)
+
+
+    # Create the FigureCanvasTkAgg object
+    canvas = FigureCanvasTkAgg(fig, master=plot_frame)
+    canvas.draw()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+    
+    # Run the Tkinter event loop
+    window.mainloop()
+    
+    
+    return df2
+
+
+def ratioel_rep_removal(df):
+    out_idx=np.any(np.isnan(df[repnames]), axis=1)
+    out_iso=rep_cps_long_df.loc[out_idx, 'isotope_gas']
+    if np.any(np.isin(out_iso, list(ratioels.values()))):
+        ratioel_out_idx=out_iso.loc[np.isin(out_iso, list(ratioels.values()))].index
+        for i in ratioel_out_idx:
+            out_ratio_el=df.loc[i, 'isotope_gas']
+            out_gasmode=Gasmodes[i%len(isotopes)]
+            isos_in_gasmode=isotopes[Gasmodes==out_gasmode]
+            idx=(np.isin(df['isotope_gas'], isos_in_gasmode)
+                    &(df['run_order']==df.loc[i, 'run_order']))
+            
+            
+            
+            out_array=np.array([list(pd.isna(df.loc[i, repnames]))]*len(isos_in_gasmode))
+            
+            df.loc[idx, repnames]= np.where(out_array, np.nan, df.loc[idx, repnames])
+    
+    return df
+
+
+
+
+
+
+def display_dataframe_with_option(df):
+    df.reset_index(inplace=True)
+    result = None  # Initialize result variable
+    
+    def yes_clicked():
+        nonlocal result  # Use nonlocal to modify the outer variable
+        result = True
+        root.destroy()
+    
+    def no_clicked():
+        nonlocal result  # Use nonlocal to modify the outer variable
+        result = False
+        root.destroy()
+
+    # Create the main window
+    root = tk.Tk()
+    root.title("DataFrame Viewer")
+    
+    #Keep the window at the front of other apps.
+    root.lift()
+    root.attributes("-topmost", True)
+
+    # Create a Treeview widget
+    tree = ttk.Treeview(root)
+
+    # Define columns based on DataFrame columns
+    tree['columns'] = list(df.columns)
+
+    # Set column headings
+    for col in df.columns:
+        #Find the width of the columns so that they can be adjusted to fit
+        max_len = max(df[col].astype(str).apply(len).max(), len(col))
+        tree.column(col, width=max_len * 10)  # Adjust the factor (10) as needed for proper sizing
+        tree.heading(col, text=col, command=lambda c=col: sortby(tree, c, 0))
+
+    # Create vertical scrollbar
+    vsb = ttk.Scrollbar(root, orient="vertical", command=tree.yview)
+    vsb.pack(side='right', fill='y')
+    tree.configure(yscrollcommand=vsb.set)
+
+    # Create horizontal scrollbar
+    hsb = ttk.Scrollbar(root, orient="horizontal", command=tree.xview)
+    hsb.pack(side='bottom', fill='x')
+    tree.configure(xscrollcommand=hsb.set)
+
+    # Insert data from DataFrame
+    for index, row in df.iterrows():
+        tree.insert(parent='', index='end', iid=index, text=index, values=list(row))
+
+    # Pack the Treeview widget
+    tree.pack()
+
+    # Create label
+    label = ttk.Label(root, text="Automatically remove P/A outliers?")
+    label.pack(pady=5)
+
+    # Create a frame to contain the buttons
+    button_frame = ttk.Frame(root)
+    button_frame.pack(pady=5)
+    
+    # Create 'Yes' and 'No' buttons
+    yes_button = ttk.Button(button_frame, text='Yes', command=yes_clicked)
+    yes_button.pack(side='left', padx=10)
+    no_button = ttk.Button(button_frame, text='No', command=no_clicked)
+    no_button.pack(side='left', padx=10)
+
+    # Start the tkinter main loop
+    root.mainloop()
+    
+    return result  # Return the result after the window is destroyed
 
 
 
@@ -1134,12 +1419,12 @@ flick=0.003
 
 #############Import data #################
 
-
 #load archive data and set datetimes
-archive_df=pd.read_csv(archivepath, index_col=0)  
-archive_df['Acq. Date-Time']=pd.to_datetime(archive_df['Acq. Date-Time'], 
-                                        dayfirst=True)
-archive_df['Elapse']=pd.to_timedelta(archive_df['Elapse']).dt.total_seconds()
+if os.path.exists(archivepath):
+    archive_df=pd.read_csv(archivepath, index_col=0)  
+    archive_df['Acq. Date-Time']=pd.to_datetime(archive_df['Acq. Date-Time'], 
+                                            dayfirst=True)
+    archive_df['Elapse']=pd.to_timedelta(archive_df['Elapse']).dt.total_seconds()
 
 
 
@@ -1184,6 +1469,7 @@ repSD_all_df=pd.DataFrame()
 #set up the progressbar
 root=tk.Tk()
 progressbar = ttk.Progressbar(root, orient=tk.HORIZONTAL, length=400)
+root.title('Progress')
 
 #Keep the window at the front of other apps.
 root.lift()
@@ -1191,7 +1477,7 @@ root.attributes("-topmost", True)
 
 
 w = 300 # width for the Tk root
-h = 200 # height for the Tk root
+h = 100 # height for the Tk root
 
 # get screen width and height
 ws = root.winfo_screenwidth() # width of the screen
@@ -1285,7 +1571,7 @@ for i, folder in enumerate(batch_t['Sample Folder']):
             gas_df['PA']=gas_df.iloc[:, idx]
             #Concat all gas modes of this repeat
             allgas_df=pd.concat([allgas_df, gas_df], ignore_index=True)
-        #extract cps, PA and stdev info from all gas modes of this repeat
+        #extract cps and PA from all gas modes
         listCPS.append((np.array(allgas_df['CPS']))) 
         listPA.append((np.array(allgas_df['PA'])))
         
@@ -1294,20 +1580,20 @@ for i, folder in enumerate(batch_t['Sample Folder']):
     isotopes=np.array(allgas_df['Isotope_gas'])    
     Gasmodes=np.array(allgas_df['Gas mode']) 
     
-    #Create nested list of CPS, PA and stdev replicates
+    #Create nested list of CPS and PA replicates
     repCPS=[list(s) for s in np.vstack(listCPS).T]
     repPA=[list(s) for s in np.vstack(listPA).T]
     
-               
+
     #Form above lists into df
     repCPS_df=pd.DataFrame([repCPS], columns=isotopes)
     repPA_df=pd.DataFrame([repPA], columns=isotopes)
-   # repSD_df=pd.DataFrame([repSD], columns=isotopes)
+
         
     #Concatenate all samples
     repCPS_all_df=pd.concat([repCPS_all_df, repCPS_df], ignore_index=True)       
     repPA_all_df=pd.concat([repPA_all_df, repPA_df], ignore_index=True)  
-    #repSD_all_df=pd.concat([repSD_all_df, repSD_df], ignore_index=True) 
+
             
 
 #close the progress bar
@@ -1315,47 +1601,225 @@ root.destroy()
 
 # Add in the info    
 repCPS_all_df=pd.concat([Run_df, repCPS_all_df], axis=1)            
-repPA_all_df=pd.concat([Run_df, repPA_all_df], axis=1)                 
+repPA_all_df=pd.concat([Run_df, repPA_all_df], axis=1)    
+
+
+#Make a long dataframe with a column for each rep
+#reshape the replicates to make one column for each
+rep_CPS_arr=np.array(repCPS_all_df[isotopes].values.tolist())
+rep_CPS_arr_reshaped=np.reshape(rep_CPS_arr, (-1, numrepeats))
+
+repPA_arr=np.array(repPA_all_df[isotopes].values.tolist()) 
+repPA_arr_reshaped=np.reshape(repPA_arr, (-1, numrepeats))
+
+s_names=[y for x in Run_df['Sample Name'].values for y in [x]*len(isotopes)]
+s_idx=[y for x in np.arange(len(repCPS_all_df)) for y in [x]*len(isotopes)]
+
+s_isos=[]
+for i in range(len(Run_df)):
+    s_isos.extend(isotopes)
+
+rep_num=[numrepeats]*len(s_idx)
+run_long_df=pd.DataFrame(list(zip(s_idx, s_names, rep_num, s_isos)), 
+                            columns=['run_order', 'sample_name', 'rep_num', 'isotope_gas'])
+#rep col names
+repnames=np.array([f"rep_{i}" for i in np.arange(numrepeats)+1])
+rep_cps_long_df=pd.concat([run_long_df, 
+                            pd.DataFrame(rep_CPS_arr_reshaped, columns=repnames)], axis=1)
+rep_PA_long_df=pd.concat([run_long_df, 
+                            pd.DataFrame(repPA_arr_reshaped, columns=repnames)], axis=1)
+
+
+
+
+####Select the ratio element
+#iterate through gas modes to select each ratio element and store as dict
+ratioels={}
+isotopes_bygas={}
+isotopes_bygas_element={}
+for gas in unique(Gasmodes):
+    gasels=isotopes[Gasmodes==gas]
+    #Use Ca48 by default, second preference is Ca43
+    ratioel_default=contains1d(gasels, 'Ca48')   
+    if sum(ratioel_default)<1:
+        ratioel_default=contains1d(gasels, 'Ca43')
+    
+    #User select the ratio isotope
+    ratioel=gasels[fancycheckbox(gasels, defaults=ratioel_default, 
+                                 single=True, title=("Select ratio isotope"
+                                                     ))][0]
+    #dict of ratio elements
+    ratioels[gas]=ratioel
+    #dict of measured full isotope names
+    isotopes_bygas[gas]=gasels
+    #dict of measured isotope names as element only (no mas or gas mode)
+    #This is for referencing with the stndvals_df.
+    isotopes_bygas_element[gas]=[
+        s.split('_')[0].strip('1234567890') for s in gasels] 
+  
+
+
+
+
+
+
+########Open the replicate editor?
+options = {'icon': 'question', 'type': 'yesno', 'default': 'no'}
+answer = tk.messagebox.askyesno(title=None, 
+                                message='Open replicate editor? (Not recommended)', **options)
+
+if answer:
+    #Remove the same rep(s) from all samples?
+    answer = tk.messagebox.askyesno(title=None, 
+                                message='Do you want to remove the same replicate from all samples?', 
+                                **options)
+    if answer:
+        #Select which reps to remove
+        rep_edit_idx=fancycheckbox(repnames, 
+                                   title=("Select the replicate(s) you want to remove (FROM ALL SAMPLES)")) 
+        if len(rep_edit_idx)>0:
+            #Remove the reps from all samples
+            #rep_cps_long_df.drop(labels=np.array(repnames)[rep_edit_idx], axis=1, inplace=True)
+            #rep_PA_long_df.drop(labels=np.array(repnames)[rep_edit_idx], axis=1, inplace=True)
+            rep_cps_long_df[repnames[rep_edit_idx]]=np.nan
+            rep_cps_long_df['rep_num']=numrepeats-len(rep_edit_idx)
+            rep_PA_long_df[repnames[rep_edit_idx]]=np.nan
+            rep_PA_long_df['rep_num']=numrepeats-len(rep_edit_idx)
+            
+
+    #P/A outlier determination
+    pa_outliers=np.array(rep_PA_long_df[repnames].apply(lambda x: 
+        (x.values!=x.value_counts().index[0])&(~pd.isna(x.values)), 
+        axis=1).tolist())
+
+    if len(rep_PA_long_df.loc[pa_outliers]) > 0:
+        # Display the P/A outliers and ask whether to auto remove?
+        answer=display_dataframe_with_option(rep_PA_long_df.loc[pa_outliers])
+    
+        if answer:
+            #Are any of the outliers the ratio element? 
+            #If so, must remove that rep from all isotopes in that sample
+            #Automatically remove P/A outlers
+            rep_cps_long_df[repnames] = np.where(pa_outliers, np.nan, rep_cps_long_df[repnames])
+            rep_cps_long_df=ratioel_rep_removal(rep_cps_long_df)
+            rep_cps_long_df['rep_num']=numrepeats-np.isnan(rep_cps_long_df[repnames]).sum(axis=1)
+            rep_PA_long_df[repnames] = np.where(pa_outliers, np.nan, rep_PA_long_df[repnames])
+            rep_PA_long_df['rep_num']=numrepeats-pd.isna(rep_PA_long_df[repnames]).sum(axis=1)
+        
+    
+    
+    #CPS outliers
+    #Set to mod = 7 arbitrarily to only highlight very clear outliers (normally use mod=1.5)
+    outmod=7
+    cps_outliers=np.array(rep_cps_long_df[repnames].apply(outsbool, mod=outmod, axis=1).tolist())
+    #omit NaNs
+    cps_outliers=cps_outliers & (~pd.isna(rep_cps_long_df[repnames]))
+    
+    cps_outlier_samples=rep_cps_long_df.loc[np.any(cps_outliers, axis=1)]
+    pa_outlier_samples=rep_PA_long_df.loc[np.any(pa_outliers, axis=1)]
+    
+    cps_outlier_samples_short=unique(cps_outlier_samples['run_order'].values)
+    out_defaults=np.array([False]*len(Run_df))
+    out_defaults[cps_outlier_samples_short]=True
+    
+    sample_edit_idx=fancycheckbox(repCPS_all_df['Sample Name'].values, defaults=out_defaults , 
+                  title=("Select the samples from which you want to edit replicates"))
+    
+    #cycle through each sample and edit
+    for id in sample_edit_idx:
+        
+        sample_df=rep_cps_long_df.loc[rep_cps_long_df['run_order']==id]
+        sample_pa_df=rep_PA_long_df.loc[rep_PA_long_df['run_order']==id]
+        sample_outlier_cps_isos=cps_outlier_samples.loc[
+            cps_outlier_samples['run_order']==id, 'isotope_gas'].values
+        sample_outlier_pa_isos=pa_outlier_samples.loc[
+            pa_outlier_samples['run_order']==id, 'isotope_gas'].values
+
+        pa_padding=np.array(['']*max([
+            0, len(sample_outlier_cps_isos)-len(sample_outlier_pa_isos)]))
+        cps_padding=np.array(['']*max([
+            0, len(sample_outlier_pa_isos)-len(sample_outlier_cps_isos)]))
+        
+        cps_pa_dict={'CPS outlier isotopes': np.concatenate((sample_outlier_cps_isos, cps_padding)), 
+                     'PA outliers isotopes': np.concatenate((sample_outlier_pa_isos, pa_padding))}
+        
+        cps_col=np.concatenate((sample_outlier_cps_isos, cps_padding))
+        pa_col=np.concatenate((sample_outlier_pa_isos, pa_padding))
+        
+        
+        cps_pa_table=pd.DataFrame(cps_pa_dict)
+        
+        
+        
+        title=str(id)+': '+repCPS_all_df.loc[id, 'Sample Name']
+        
+        sample_df.loc[:, 'old_index']=sample_df.index.values
+        sample_pa_df.loc[:, 'old_index']=sample_pa_df.index.values
+        
+        sample_df=sample_df.set_index('isotope_gas', drop=False)
+        sample_pa_df=sample_pa_df.set_index('isotope_gas', drop=False)
+        
+        new_sample_df=repeditor(sample_df, sample_pa_df, title, cps_pa_table, id)
+        
+        new_sample_df=new_sample_df.set_index('old_index')
+        
+        rep_cps_long_df.loc[new_sample_df.index]=new_sample_df.copy()
+        
+
+
+#Are any of the outliers the ratio element? 
+#If so, must remove that rep from all isotopes in that sample
+rep_cps_long_df=ratioel_rep_removal(rep_cps_long_df)
+
+rep_cps_long_df['rep_num']=(numrepeats-np.sum(np.isnan(rep_cps_long_df[repnames]), axis=1))
+rep_cps_long_df['rep_list']=rep_cps_long_df[repnames].apply(list, axis=1)
+
 
 #Create means and stdevs.
-CPSmean=np.array([])
-CPSstd=np.array([])
-for lab, row in repCPS_all_df.iterrows():    
-    bb=np.array([np.array([np.array(b).mean(), np.array(b).std(ddof=1)]) for
-                 b in row[isotopes]])
-    CPSmean=np.concatenate([CPSmean, bb[:, 0]])
-    CPSstd=np.concatenate([CPSstd, bb[:, 1]])
-CPSmean=CPSmean.reshape([-1, len(bb)])
-CPSstd=CPSstd.reshape([-1, len(bb)])
-
-#Make dataframes
-CPSmean_df=pd.DataFrame(CPSmean, columns=isotopes)
-CPSstd_df=pd.DataFrame(CPSstd, columns=isotopes)
-    
-# Add in the info 
-CPSmean_df=pd.concat([Run_df, CPSmean_df], axis=1)            
-CPSstd_df=pd.concat([Run_df, CPSstd_df], axis=1) 
-
-#Create average P/A table
-PAarray=[]
-for lab, row in repPA_all_df[isotopes].iterrows(): #iterate over rows of df
-    els=np.array(list(row))
-    PAlist=[]
-    for x in els: #iterate through elements
-        if all(x=='P') | all(x=='A'):
-            PAlist.append(str(x[0]))
-        
-        #If there is a mix of 'P' and 'A' throughout the sample then label PA
-        #as 'M' for mixed.
-        else:
-            PAlist.append('M')
-    PAarray.append(PAlist) #list of lists
-    
-    
-PA_df=pd.DataFrame(np.array(PAarray), columns=isotopes) #make the df
-PA_df=pd.concat([Run_df, PA_df], axis=1) #add the info
+rep_cps_long_df['cps_mean']=np.nanmean(rep_cps_long_df[repnames], axis=1)
+rep_cps_long_df['cps_std']=np.nanstd(rep_cps_long_df[repnames], axis=1, ddof=1)
+CPSmean_df=pd.pivot_table(rep_cps_long_df, values='cps_mean', index='run_order'
+                          , columns=['isotope_gas'], sort=False)
+CPSmean_df.reset_index(inplace=True)
+CPSmean_df=pd.concat([Run_df, CPSmean_df], axis=1)
+CPSstd_df=pd.pivot_table(rep_cps_long_df, values='cps_std', index='run_order'
+                          , columns=['isotope_gas'], sort=False)
+CPSstd_df.reset_index(inplace=True)
+CPSstd_df=pd.concat([Run_df, CPSstd_df], axis=1)
 
 
+#Make df of lists of all reps
+repCPS_all_df=pd.pivot_table(rep_cps_long_df, values='rep_list', index='run_order'
+                          , columns=['isotope_gas'], sort=False)
+reps_pivoted_sorted = rep_cps_long_df.pivot(index='run_order', columns=['isotope_gas'], 
+                        values='rep_list')
+repCPS_all_df[isotopes]=reps_pivoted_sorted[isotopes]
+
+#####Create average P/A table
+#make sure any reps chosen in the rep editor are assigned as nan in PA df
+mask=np.isnan(rep_cps_long_df[repnames])
+rep_PA_long_df[repnames] = np.where(mask, np.nan, rep_PA_long_df[repnames])
+rep_PA_long_df['rep_num']=rep_cps_long_df['rep_num']
+
+rep_PA_long_df['PA_all_digi'] = (np.nansum(rep_PA_long_df[repnames]=='P', axis=1)
+                                 /rep_PA_long_df['rep_num'])
+PA_digi_df=pd.pivot_table(rep_PA_long_df, values='PA_all_digi', index='run_order'
+                          , columns=['isotope_gas'], sort=False)
+PA_df=PA_digi_df.copy()
+PA_df[isotopes]='M'
+PA_df[isotopes] = np.where(PA_digi_df[isotopes]==1, 
+                                    'P', PA_df[isotopes] ) 
+PA_df[isotopes]  = np.where(PA_digi_df[isotopes] ==0, 
+                                    'A', PA_df[isotopes] ) 
+PA_df.reset_index(inplace=True)
+PA_df=pd.concat([Run_df, PA_df], axis=1)
+
+
+#Create table of rep numbers (n)
+n_df=pd.pivot_table(rep_cps_long_df, values='rep_num', index='run_order'
+                          , columns=['isotope_gas'], sort=False)
+n_df.reset_index(inplace=True)
+n_df=pd.concat([Run_df, n_df], axis=1)
 
 
 
@@ -1496,30 +1960,10 @@ debrkt=pickfig(cpsbrkt, 'Elapse',
 brktrows=brktrows[~np.in1d(brktrows, debrkt)]
 
 
-
-#iterate through gas modes to select each ratio element and store as dict
-ratioels={}
-isotopes_bygas={}
-isotopes_bygas_element={}
-for gas in unique(Gasmodes):
-    gasels=isotopes[Gasmodes==gas]
-    #Use Ca48 by default, second preference is Ca43
-    ratioel_default=contains1d(gasels, 'Ca48')   
-    if sum(ratioel_default)<1:
-        ratioel_default=contains1d(gasels, 'Ca43')
+  
     
-    #User select the ratio isotope
-    ratioel=gasels[fancycheckbox(gasels, defaults=ratioel_default, 
-                                 single=True, title=("Select ratio isotope"
-                                                     ))][0]
-    #dict of ratio elements
-    ratioels[gas]=ratioel
-    #dict of measured full isotope names
-    isotopes_bygas[gas]=gasels
-    #dict of measured isotope names as element only (no mas or gas mode)
-    #This is for referencing with the stndvals_df.
-    isotopes_bygas_element[gas]=[
-        s.split('_')[0].strip('1234567890') for s in gasels] 
+    
+    
     
 #Select calibration method
 calistyle_list=['Single-point', 'Calibration curve']
@@ -1655,15 +2099,16 @@ if calistyle=='Calibration curve':
 #Ensure that all cali standards are using the same detector mode (P/A)
 #Find the P/A of the bracketing standard, remove standards from cali curve that
 #aren't the same P/A. 
+PA_bracket_bad_index={}
 if calistyle=='Calibration curve':
     PA_df_cali=PA_df.loc[calindx, :]
     for i, iso in enumerate(isotopes):   
         #The P/A of the bracketing standard       
         PAbracket=PA_df.loc[brktrows, iso]
         
-        #if more than one P/A, then only perform single point calibration
+        #if more than one P/A, then remove them from calibration
         if len(PAbracket.value_counts())>1:                       
-            missing[iso]=i
+            PA_bracket_bad_index[iso]=PAbracket.index[PAbracket!=PAbracket.value_counts().index[0]].values
             
         PA_df_cali[iso]==PAbracket.value_counts().index[0]  
         PAcounts=PA_df_cali[iso].value_counts()
@@ -1725,6 +2170,11 @@ for i, row in repCPS_all_df.iterrows():
         rep_x_array=np.array(list(row[iso]))
         #array of denominators (Ca)
         rep_y_array=np.array(list(repCPS_y_df.loc[i, iso]))   
+        
+        #remove any NaNs
+        rep_y_array=rep_y_array[~np.isnan(rep_x_array)]
+        rep_x_array=rep_x_array[~np.isnan(rep_x_array)]
+
         #covariances
         cov_array=np.append(cov_array, 
                          np.cov(np.vstack((rep_x_array, rep_y_array)))[0, 1])
@@ -1750,6 +2200,26 @@ theo_R_rse_df=RunNaN_df.copy()
 theo_Rbc_rse_df=RunNaN_df.copy()
 theo_B_rse_df=RunNaN_df.copy()
 theo_Bbc_rse_df=RunNaN_df.copy()
+
+#Initialize index lists
+blk_index_1_ls=[]
+blk_index_2_ls=[]
+brkt_index_1_ls=[]
+brkt_index_2_ls=[]
+Dtb_ls=[]
+Dts_ls=[]
+Dts1b_ls=[]
+Dts2b_ls=[]
+
+
+indexes_dict={'blk_1_run_order':np.full((len(Run_df)),np.nan), 
+              'blk_2_run_order':np.full((len(Run_df)),np.nan), 
+              'brkt_1_run_order':np.full((len(Run_df)),np.nan),
+              'brkt_2_run_order':np.full((len(Run_df)),np.nan), 
+              'time_fraction_between_blks':np.full((len(Run_df)),np.nan),
+              'time_fraction_between_brkts':np.full((len(Run_df)),np.nan),
+              'brkt_1_time_fraction_between_blks':np.full((len(Run_df)),np.nan),
+              'brkt_2_time_fraction_between_blks':np.full((len(Run_df)),np.nan)}
 
 
 #Cycle through sample by sample to calculate R and B
@@ -1875,11 +2345,16 @@ for i, row in CPSmean_df.iterrows():
     
     
     
-    
-    
-    
-    
-    
+    #record blank indexes, brkt indexes, Dtb, Dts, Dts1b, Dts2b
+    indexes_dict['blk_1_run_order'][i]=blk_r[0]
+    indexes_dict['blk_2_run_order'][i]=blk_r[1]
+    indexes_dict['brkt_1_run_order'][i]=brkt_r[0]
+    indexes_dict['brkt_2_run_order'][i]=brkt_r[1]
+    indexes_dict['time_fraction_between_blks'][i]=Dtb
+    indexes_dict['time_fraction_between_brkts'][i]=Dts
+    indexes_dict['brkt_1_time_fraction_between_blks'][i]=Dts1b
+    indexes_dict['brkt_2_time_fraction_between_blks'][i]=Dts2b
+
     
     
     
@@ -1902,10 +2377,12 @@ for i, row in CPSmean_df.iterrows():
     
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-    
+        num_rep_arr=n_df.loc[i, isotopes].values.astype(int)
         #c4 function for adjusting SE for low number of measurements
-        c4=math.gamma(numrepeats/2)/math.gamma((numrepeats-1)/2)*(
-            2/(numrepeats-1))**0.5;
+        
+        c4=np.array([math.gamma(x/2)/math.gamma((x-1)/2)*(
+            2/(x-1))**0.5 for x in num_rep_arr])
+        
         #convert variance into standard deviation
         ratio_smpl_se=ratio_smpl_var**0.5/c4/numrepeats**0.5
         brkt_smpl_se=brkt_smpl_var**0.5/c4/numrepeats**0.5
@@ -2027,7 +2504,9 @@ for i, row in CPSmean_df.iterrows():
         theo_Bbc_rse_df.loc[i, sing_isos]=theo_Bbc_rse[sing_isos]
         
         
-        
+
+
+      
         
         
         
@@ -2043,6 +2522,15 @@ if calistyle=='Calibration curve':
         s_array=np.array(stnd_dict[Run_df.loc[c, 'Sample Name']]).T
         stnd_array=np.append(stnd_array, s_array, axis=0)    
     stnd_df[curve_isos]=stnd_array
+    
+    
+    #Remove bracketing standards that exhibit different PA
+    
+    for iso in PA_bracket_bad_index.keys():
+        idx=np.intersect1d(stnd_df.index.values, PA_bracket_bad_index[iso])
+        if len(idx)>0:
+            stnd_df.loc[idx, iso]=np.nan
+    
     
     #make dataframes containing information from the calibration curve fit
     #including: x values, y values, r_sq, fit parameters
@@ -2294,147 +2782,132 @@ LoD_df[isotopes]=nanarray
 LoD_df[sing_isos]=LoDstack    
 
 
-
-    
-
 #make the covariance dataframe
 cov_run_df=pd.concat([Run_df, cov_df], axis=1)   
 
-#Expand the replicates so that can be viewable in an excel file (one cell per
-# rep)
-reps_expand_df=Run_df.copy()
-#cycle through elements
-for col in repCPS_all_df.columns[5:]:
-    #convert element column of reps into matrix of reps and samples
-    elarray=np.array(list(repCPS_all_df[col]))    
-    #create new column names for the replicate columns
-    colnames=[m+'_rep'+str(n) for m,n in zip([col]*5,np.arange(numrepeats)+1)]
-    #build into dataframe
-    eldf=pd.DataFrame(elarray, columns=colnames)
-    reps_expand_df=pd.concat([reps_expand_df, eldf], axis=1)   
     
-
-    
-
-
 
 #############Long-term precision#############
 
-#User choose which standards to get long-term precision data for
-stndnamearray=np.array(stndval_names)
-stndbool=np.array([])
-while stndbool.size<1:
-    stndbool=fancycheckbox(
-        stndnamearray, title=("Include long-term precision data?"))
-stndlistchoice=stndnamearray[stndbool]
+if os.path.exists(archivepath):
+
+    #User choose which standards to get long-term precision data for
+    stndnamearray=np.array(stndval_names)
+    stndbool=np.array([])
+    while stndbool.size<1:
+        stndbool=fancycheckbox(
+            stndnamearray, title=("Include long-term precision data?"))
+    stndlistchoice=stndnamearray[stndbool]
 
 
-#Get the name of the bracketing standard
-commonbrkt=Run_df.loc[brktrows, 'Sample Name'].value_counts().index[0]
-brktname=stnd_dict[commonbrkt].columns[0]
+    #Get the name of the bracketing standard
+    commonbrkt=Run_df.loc[brktrows, 'Sample Name'].value_counts().index[0]
+    brktname=stnd_dict[commonbrkt].columns[0]
 
 
-#get the archive data from chosen stnds that uses the same brkt stnd 
-cs_all_df=archive_df.loc[(contains1d(archive_df['Sample Name'], stndlistchoice))
-                         & (archive_df['BrktStnd']==brktname)] 
-#Compile the long-term data from the archive.
-ltp_df=pd.DataFrame()
+    #get the archive data from chosen stnds that uses the same brkt stnd 
+    cs_all_df=archive_df.loc[(contains1d(archive_df['Sample Name'], stndlistchoice))
+                            & (archive_df['BrktStnd']==brktname)] 
+    #Compile the long-term data from the archive.
+    ltp_df=pd.DataFrame()
 
-#Need to cycle through elements and standards to remove outliers
-for iso in sing_isos:  
-    iso_df=cs_all_df.loc[cs_all_df['Isotope gas']==iso]
-    for cs in stndlistchoice:
-                
-        cs_df=iso_df.loc[iso_df['Sample Name'].str.contains(cs, case=False)]                                  
-        cs_sing=cs_df['Cali_single']
-        cs_curv=cs_df['Cali_curve']
-        
-        if len(cs_sing)<2:
-            continue
-        
-        #Remove outliers
-        sing_outs=outsbool(np.array(cs_sing))
-        sing_std=cs_sing[~sing_outs].std()*2
-        sing_m=cs_sing[~sing_outs].mean()
-        sing_rsd=sing_std/sing_m*100
-        sing_n=sum(~np.isnan(cs_sing[~sing_outs]))
-        
-        curv_std=np.nan
-        curv_m=np.nan
-        curv_rsd=np.nan
-        curv_n=sum(~np.isnan(cs_curv))
-        if curv_n>2:            
-            curv_outs=outsbool(np.array(cs_curv))
-            curv_std=cs_curv[~curv_outs].std()*2
-            curv_m=cs_curv[~curv_outs].mean()
-            curv_rsd=curv_std/curv_m*100
-            curv_n=sum(~np.isnan(cs_curv[~curv_outs]))
-        
-        #Add in the expected values from the stnd_vals.csv
-        expect=calivals_df.loc[iso, cs]
+    #Need to cycle through elements and standards to remove outliers
+    for iso in sing_isos:  
+        iso_df=cs_all_df.loc[cs_all_df['Isotope gas']==iso]
+        for cs in stndlistchoice:
+                    
+            cs_df=iso_df.loc[iso_df['Sample Name'].str.contains(cs, case=False)]                                  
+            cs_sing=cs_df['Cali_single']
+            cs_curv=cs_df['Cali_curve']
             
-        #Within-run data
-        
-        #Find the stnd in the run
-        sing_run=cali_sing_df.loc[contains1d(Run_df['Sample Name'], 
-                                             cs), iso].values
-        sing_run_m=sing_run.mean()
-        sing_run_1se=cali_sing_se_df.loc[contains1d(Run_df['Sample Name'], 
-                                             cs), iso].values
-        sing_run_2se_m=sing_run_1se.mean()*2
-        sing_run_std=np.nan
-        if len(sing_run)>2:
-            outs=outsbool(sing_run)
-            sing_run_std=sing_run[~outs].std()*2
-            sing_run_m=sing_run[~outs].mean()
-            sing_run_2se_m=sing_run_1se[~outs].mean()
-        
-        
-        if calistyle=='Calibration curve':
-            curv_run=cali_curv_df.loc[contains1d(Run_df['Sample Name'], 
-                                                 cs), iso].values
-            curv_run_m=sing_run.mean()
-            curv_run_1se=cali_curv_se_df.loc[contains1d(Run_df['Sample Name'], 
-                                                 cs), iso].values
-            curv_run_2se_m=curv_run_1se.mean()*2
-            curv_run_std=np.nan
-            if sum(~np.isnan(curv_run))>2:
-                outs=outsbool(curv_run)
-                curv_run_std=curv_run[~outs].std()*2
-                curv_run_m=curv_run[~outs].mean()
-                curv_run_2se_m=curv_run_1se[~outs].mean()*2
-        else:
-            curv_run_m=np.nan
-            curv_run_2se_m=np.nan
-            curv_run_std=np.nan
+            if len(cs_sing)<2:
+                continue
             
-        
-        
-        
-        #Put all the data together
-        cols=['Stnd', 'Isotope gas', 'units', 'Expected', 'Archive S-P mean', 
-                  'Archive S-P 2sd', 'Archive S-P %2rsd', 'Archive S-P n',
-                  'Run S-P mean', 'Run S-P 2se (mean)', 'Run S-P 2sd',                
-                  'Archive curve mean', 'Archive curve 2sd' , 
-                  'Archive curve %2rsd', 'Archive curve n', 
-                  'Run curve mean', 'Run curve 2se (mean)', 'Run curve 2sd',]   
-        var_list=[cs, iso, cs_df['units'].iloc[0], expect, sing_m, sing_std, 
-                  sing_rsd, sing_n, 
-                  sing_run_m, sing_run_2se_m, sing_run_std,
-                  curv_m, curv_std, curv_rsd,curv_n, 
-                  curv_run_m, curv_run_2se_m, curv_run_std]
-        
-               
-        temp_dict=dict(zip(cols, var_list))    
+            #Remove outliers
+            sing_outs=outsbool(np.array(cs_sing))
+            sing_std=cs_sing[~sing_outs].std()*2
+            sing_m=cs_sing[~sing_outs].mean()
+            sing_rsd=sing_std/sing_m*100
+            sing_n=sum(~np.isnan(cs_sing[~sing_outs]))
+            
+            curv_std=np.nan
+            curv_m=np.nan
+            curv_rsd=np.nan
+            curv_n=sum(~np.isnan(cs_curv))
+            if curv_n>2:            
+                curv_outs=outsbool(np.array(cs_curv))
+                curv_std=cs_curv[~curv_outs].std()*2
+                curv_m=cs_curv[~curv_outs].mean()
+                curv_rsd=curv_std/curv_m*100
+                curv_n=sum(~np.isnan(cs_curv[~curv_outs]))
+            
+            #Add in the expected values from the stnd_vals.csv
+            expect=calivals_df.loc[iso, cs]
                 
-        ltp_df=pd.concat([ltp_df, pd.DataFrame(temp_dict, index=[0])])      
-    
+            #Within-run data
+            
+            #Find the stnd in the run
+            sing_run=cali_sing_df.loc[contains1d(Run_df['Sample Name'], 
+                                                cs), iso].values
+            sing_run_m=sing_run.mean()
+            sing_run_1se=cali_sing_se_df.loc[contains1d(Run_df['Sample Name'], 
+                                                cs), iso].values
+            sing_run_2se_m=sing_run_1se.mean()*2
+            sing_run_std=np.nan
+            if len(sing_run)>2:
+                outs=outsbool(sing_run)
+                sing_run_std=sing_run[~outs].std()*2
+                sing_run_m=sing_run[~outs].mean()
+                sing_run_2se_m=sing_run_1se[~outs].mean()
+            
+            
+            if calistyle=='Calibration curve':
+                curv_run=cali_curv_df.loc[contains1d(Run_df['Sample Name'], 
+                                                    cs), iso].values
+                curv_run_m=sing_run.mean()
+                curv_run_1se=cali_curv_se_df.loc[contains1d(Run_df['Sample Name'], 
+                                                    cs), iso].values
+                curv_run_2se_m=curv_run_1se.mean()*2
+                curv_run_std=np.nan
+                if sum(~np.isnan(curv_run))>2:
+                    outs=outsbool(curv_run)
+                    curv_run_std=curv_run[~outs].std()*2
+                    curv_run_m=curv_run[~outs].mean()
+                    curv_run_2se_m=curv_run_1se[~outs].mean()*2
+            else:
+                curv_run_m=np.nan
+                curv_run_2se_m=np.nan
+                curv_run_std=np.nan
+                
+            
+            
+            
+            #Put all the data together
+            cols=['Stnd', 'Isotope gas', 'units', 'Expected', 'Archive S-P mean', 
+                    'Archive S-P 2sd', 'Archive S-P %2rsd', 'Archive S-P n',
+                    'Run S-P mean', 'Run S-P 2se (mean)', 'Run S-P 2sd',                
+                    'Archive curve mean', 'Archive curve 2sd' , 
+                    'Archive curve %2rsd', 'Archive curve n', 
+                    'Run curve mean', 'Run curve 2se (mean)', 'Run curve 2sd',]   
+            var_list=[cs, iso, cs_df['units'].iloc[0], expect, sing_m, sing_std, 
+                    sing_rsd, sing_n, 
+                    sing_run_m, sing_run_2se_m, sing_run_std,
+                    curv_m, curv_std, curv_rsd,curv_n, 
+                    curv_run_m, curv_run_2se_m, curv_run_std]
+            
+                
+            temp_dict=dict(zip(cols, var_list))    
+                    
+            ltp_df=pd.concat([ltp_df, pd.DataFrame(temp_dict, index=[0])])      
+        
 
-ltp_df=ltp_df.reset_index(drop=True)
+    ltp_df=ltp_df.reset_index(drop=True)
 
 
 
 
+
+indexes_df=pd.concat((Run_df, pd.DataFrame(indexes_dict)), axis=1)
 
 
 #make units for the headings of the excel output
@@ -2452,14 +2925,14 @@ isExist = os.path.exists(savepath)
 if not isExist:
     os.makedirs(savepath)
     
-savename=textinputbox()
+savename=textinputbox(title="Enter save name")
 #add a timestamp to the filename to reduce risk of accidental data overwrite
 tstamp=str(round(time.time()))
 
 
 #Write short output 
 with pd.ExcelWriter(savepath+savename +'_short_'+ tstamp +'.xlsx') as writer:
-    reps_expand_df.to_excel(writer, sheet_name='Reps')
+    rep_cps_long_df.to_excel(writer, sheet_name='Reps')
     CPSmean_df.to_excel(writer, sheet_name='CPS')
     CPSstd_df.to_excel(writer, sheet_name='CPS_1sd')    
 
@@ -2480,11 +2953,12 @@ with pd.ExcelWriter(savepath+savename +'_short_'+ tstamp +'.xlsx') as writer:
         
 #Write long output      
 with pd.ExcelWriter(savepath+savename +'_full_'+ tstamp +'.xlsx') as writer:
-    reps_expand_df.to_excel(writer, sheet_name='Reps')
+    rep_cps_long_df.to_excel(writer, sheet_name='Reps')
     CPSmean_df.to_excel(writer, sheet_name='CPS')
     CPSstd_df.to_excel(writer, sheet_name='CPS 1sd')
     PA_df.to_excel(writer, sheet_name='PA')
     cov_run_df.to_excel(writer, sheet_name='Covar')  
+    indexes_df.to_excel(writer, sheet_name='indexes')  
     ratio_smpl_df.to_excel(writer, sheet_name='R')  
     ratio_smpl_se_df.to_excel(writer, sheet_name='R 1se')  
     brkt_smpl_df.to_excel(writer, sheet_name='Bracket')  
@@ -2507,7 +2981,8 @@ with pd.ExcelWriter(savepath+savename +'_full_'+ tstamp +'.xlsx') as writer:
         cali_curv_se_df_wunits.to_excel(writer, sheet_name='Curve cali 1se')
         params_df.to_excel(writer, sheet_name='Curve params')
     LoD_df.to_excel(writer, sheet_name='LoD')
-    ltp_df.to_excel(writer, sheet_name='Long-term precision')
+    if os.path.exists(archivepath):
+        ltp_df.to_excel(writer, sheet_name='Long-term precision')
     
     theo_R_rse_df.to_excel(writer, sheet_name='theo R rse')
     theo_Rbc_rse_df.to_excel(writer, sheet_name='theo Rbc rse')
@@ -2522,12 +2997,10 @@ with pd.ExcelWriter(savepath+savename +'_full_'+ tstamp +'.xlsx') as writer:
 
 
 
-################## Format (melt) data for archiving#############
-
-
-repCPS_all_df['Type']=Run_df['Type']
-repCPS_all_df['Runorder']=np.arange(len(Run_df))+1
+################## Format data for archiving#############
 Run_df['Runorder']=np.arange(len(Run_df))+1
+repCPS_all_df=pd.concat((Run_df, repCPS_all_df), axis=1)
+
 
 
 #Melt all the data into a single dataframe
@@ -2565,6 +3038,8 @@ for iso in isotopes:
         LoD_df.loc[0,iso])
     Melt_df.loc[Melt_df['Isotope gas']==iso,'Gas mode']=gasmode_dict[iso]
     Melt_df.loc[Melt_df['Isotope gas']==iso,'intTime']=inttime_dict[iso]
+    Melt_df.loc[Melt_df['Isotope gas']==iso, 'N']=rep_cps_long_df.loc[
+        rep_cps_long_df['isotope_gas']==iso, 'rep_num'].values
 
 for k in ratioels.keys():
     Melt_df.loc[Melt_df['Gas mode']==k,'Ratio iso']=ratioels[k]
@@ -2573,11 +3048,6 @@ for iso in calivals_df.index:
     Melt_df.loc[Melt_df['Isotope gas']==iso,'units'
                    ]=calivals_df.loc[iso, 'Units']
     
-
-
-#Included number of reps (N)
-for i in np.array(Melt_df.index):
-    Melt_df.loc[i, 'N']=len(Melt_df.loc[i, 'CPS reps'])
 
 
 if calistyle=='Calibration curve':
@@ -2638,29 +3108,25 @@ if answer:
     
 
 
-
-
-    
-#Is the run already present in the archive data? 
-#If yes, ask whether the user wants to replace the existing data. 
-#If no, the data is not saved
-if any(archive_df['Run Name']==Melt_df['Run Name'][0]):
-    answer = tk.messagebox.askyesno(title=None, 
-                                    message='Overwrite data in archive?')
-    if answer:
-        archive_df=archive_df.loc[archive_df['Run Name']!=Melt_df['Run Name'][0]]
+if os.path.exists(archivepath):
+    #Is the run already present in the archive data? 
+    #If yes, ask whether the user wants to replace the existing data. 
+    #If no, the data is not saved
+    if any(archive_df['Run Name']==Melt_df['Run Name'][0]):
+        answer = tk.messagebox.askyesno(title=None, 
+                                        message='Overwrite data in archive?')
+        if answer:
+            archive_df=archive_df.loc[archive_df['Run Name']!=Melt_df['Run Name'][0]]
+            archive_df=pd.concat([archive_df, Melt_df], ignore_index=True)
+            archive_df.to_csv(archivepath)
+    else:
         archive_df=pd.concat([archive_df, Melt_df], ignore_index=True)
         archive_df.to_csv(archivepath)
 else:
-    archive_df=pd.concat([archive_df, Melt_df], ignore_index=True)
-    archive_df.to_csv(archivepath)
-    
-  
+    #If the archive doesn't already exist, then start one with this run
+    Melt_df.to_csv(archivepath)
 
 
 
 #Finished message box
 tk.messagebox.showinfo("", "Processing complete")
-
-
-
