@@ -417,10 +417,6 @@ def pickfig(df, xvar, title):
 
 
 
-
-
-
- 
 #############Import data #################
 
 #Select directory
@@ -818,6 +814,30 @@ for i, row in CPSmean_df.iterrows():
     exPA_df.loc[i, isotopes]=exPA_ls
 
 
+
+rep_CPS_arr=np.array(repCPS_all_df[isotopes].values.tolist())
+rep_CPS_arr_reshaped=np.reshape(rep_CPS_arr, (-1, numrepeats))
+
+s_names=[y for x in Run_df['Sample Name'].values for y in [x]*len(isotopes)]
+s_idx=[y for x in np.arange(len(repCPS_all_df)) for y in [x]*len(isotopes)]
+
+s_isos=[]
+for i in range(len(Run_df)):
+    s_isos.extend(isotopes)
+
+rep_num=[numrepeats]*len(s_idx)
+run_long_df=pd.DataFrame(list(zip(s_idx, s_names, rep_num, s_isos)), 
+                            columns=['run_order', 'sample_name', 'rep_num', 'isotope_gas'])
+#rep col names
+repnames=np.array([f"rep_{i}" for i in np.arange(numrepeats)+1])
+rep_cps_long_df=pd.concat([run_long_df, 
+                            pd.DataFrame(rep_CPS_arr_reshaped, columns=repnames)], axis=1)
+rep_cps_long_df['rep_list']=rep_cps_long_df[repnames].apply(list, axis=1)
+rep_cps_long_df['cps_mean']=np.nanmean(rep_cps_long_df[repnames], axis=1)
+rep_cps_long_df['cps_std']=np.nanstd(rep_cps_long_df[repnames], axis=1, ddof=1)
+
+
+## FIX Unecessary?
 #Expand the replicates so that can be viewable in an excel file (one cell per
 # rep)
 reps_expand_df=Run_df.copy()
@@ -864,7 +884,7 @@ for r in ratioels:
 
 
 with pd.ExcelWriter(savepath+savename +'_Ca_'+ tstamp +'.xlsx') as writer:
-    reps_expand_df.to_excel(writer, sheet_name='Reps')
+    rep_cps_long_df.to_excel(writer, sheet_name='Reps')
     CPSmean_df.to_excel(writer, sheet_name='CPS')
     PA_df.to_excel(writer, sheet_name='PA') 
     CaConc_df.to_excel(writer, sheet_name='CaConc (mM)') 
