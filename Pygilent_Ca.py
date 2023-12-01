@@ -785,13 +785,18 @@ for i, row in CPSmean_df.iterrows():
    3 "Desired vol (ul)",
    4 "Desired conc (mM)"
     """
+    #convert from object dtype
+    brkt_smpl=brkt_smpl.convert_dtypes()
+    
+    #Calculate pipetting vols
     CaConc_smpl=brkt_smpl*entries[0]
     undiluted_smpl=CaConc_smpl/entries[1]*(entries[2]+entries[1])
     VolSmpl_smpl=entries[3]*entries[4]/undiluted_smpl
     #Adjust pipetting volume so that minimum is 2ul    
     VolSmpl_smpl.loc[VolSmpl_smpl<2]=2
+    VolSmpl_smpl=np.round(VolSmpl_smpl, decimals=1)
     VolAcid_smpl=VolSmpl_smpl*undiluted_smpl/entries[4] - VolSmpl_smpl
-
+    VolAcid_smpl=np.round(VolAcid_smpl, decimals=1)
 
     
     #blkcorr_df=RunNaN_df.copy()
@@ -890,10 +895,5 @@ with pd.ExcelWriter(savepath+savename +'_Ca_'+ tstamp +'.xlsx') as writer:
         df.to_excel(writer, sheet_name=r)  
     entries_df.to_excel(writer, sheet_name="parameters")
         
-
 #Finished message box
 tk.messagebox.showinfo("", "Processing complete")
-
-
-
-
