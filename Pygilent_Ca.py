@@ -664,8 +664,8 @@ labels = [
 ]
 
 entries=Cacheckinput(labels, defaults)
-
-
+entries_dict=dict(zip(labels, entries))
+entries_df=pd.DataFrame(entries_dict, index=[0])
 #################Processing ##################
 
 #create array of Ca counts using different gases
@@ -688,7 +688,7 @@ VolAcid_df=RunNaN_df.copy()
 exPA_df=RunNaN_df.copy()
 
 
-   
+
 #Cycle through sample by sample to blank correct then bracket
 for i, row in CPSmean_df.iterrows():
     #If a blank, skip
@@ -888,6 +888,7 @@ with pd.ExcelWriter(savepath+savename +'_Ca_'+ tstamp +'.xlsx') as writer:
     VolAcid_df.to_excel(writer, sheet_name='Vol acid (ul)')  
     for r, df in zip(ratioels, dflist):
         df.to_excel(writer, sheet_name=r)  
+    entries_df.to_excel(writer, sheet_name="parameters")
         
 
 #Finished message box
