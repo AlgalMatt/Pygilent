@@ -788,10 +788,11 @@ for i, row in CPSmean_df.iterrows():
     CaConc_smpl=brkt_smpl*entries[0]
     undiluted_smpl=CaConc_smpl/entries[1]*(entries[2]+entries[1])
     VolSmpl_smpl=entries[3]*entries[4]/undiluted_smpl
-    VolAcid_smpl=entries[3]-VolSmpl_smpl
+    #Adjust pipetting volume so that minimum is 2ul    
+    VolSmpl_smpl.loc[VolSmpl_smpl<2]=2
+    VolAcid_smpl=VolSmpl_smpl*undiluted_smpl/entries[4] - VolSmpl_smpl
 
-    
-           
+
     
     #blkcorr_df=RunNaN_df.copy()
     CaConc_df.loc[i, isotopes]=CaConc_smpl
@@ -843,17 +844,18 @@ for col in repCPS_all_df.columns[5:]:
     #build into dataframe
     eldf=pd.DataFrame(elarray, columns=colnames)
     reps_expand_df=pd.concat([reps_expand_df, eldf], axis=1)   
-  
-    
-  
-    
-  
+
+
+
+
+###### Saving ######
+
 savepath=folder_select+'/Pygilent_out/'
 isExist = os.path.exists(savepath)
 
 if not isExist:
     os.makedirs(savepath)    
-  
+
 savename=textinputbox(title="Enter save name")
 tstamp=str(round(time.time()))
 
