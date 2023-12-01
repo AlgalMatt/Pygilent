@@ -3057,15 +3057,17 @@ if os.path.exists(archivepath):
     #User choose which standards to get long-term precision data for
     stndnamearray=np.append(np.array(stndval_names), 'None')
     stndbool=np.array([])
-    while stndbool.size<1:
-        stndbool=fancycheckbox(
-            stndnamearray, title=("Include long-term precision data?"))
-    stndlistchoice=stndnamearray[stndbool]
+    stndbool=fancycheckbox(
+        stndnamearray, title=("Include long-term precision data?"))
+    if len(stndbool)>0:
+        stndlistchoice=stndnamearray[stndbool]
+    else:
+        stndlistchoice=None
     
     
 
     #Continue if any standards were selected by user
-    if stndnamearray[stndbool]!='None':
+    if stndlistchoice!=None:
         #Get the name of the bracketing standard
         commonbrkt=Run_df.loc[brktrows, 'Sample Name'].value_counts().index[0]
         brktname=stnd_dict[commonbrkt].columns[0]
