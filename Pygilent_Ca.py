@@ -1,19 +1,12 @@
 import os
 import pandas as pd
 import numpy as np
-import sympy as sym
 from tkinter import filedialog
 import tkinter as tk
 import csv
-import math
-import warnings
-import statsmodels.api as sm
 import time
-import statistics
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import matplotlib 
-from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
 ####### Functions ################
@@ -671,8 +664,8 @@ labels = [
 ]
 
 entries=Cacheckinput(labels, defaults)
-
-
+entries_dict=dict(zip(labels, entries))
+entries_df=pd.DataFrame(entries_dict, index=[0])
 #################Processing ##################
 
 #create array of Ca counts using different gases
@@ -695,7 +688,7 @@ VolAcid_df=RunNaN_df.copy()
 exPA_df=RunNaN_df.copy()
 
 
-   
+
 #Cycle through sample by sample to blank correct then bracket
 for i, row in CPSmean_df.iterrows():
     #If a blank, skip
@@ -792,13 +785,19 @@ for i, row in CPSmean_df.iterrows():
    3 "Desired vol (ul)",
    4 "Desired conc (mM)"
     """
+    #convert from object dtype
+    brkt_smpl=brkt_smpl.convert_dtypes()
+    
+    #Calculate pipetting vols
     CaConc_smpl=brkt_smpl*entries[0]
     undiluted_smpl=CaConc_smpl/entries[1]*(entries[2]+entries[1])
     VolSmpl_smpl=entries[3]*entries[4]/undiluted_smpl
-    VolAcid_smpl=entries[3]-VolSmpl_smpl
+    #Adjust pipetting volume so that minimum is 2ul    
+    VolSmpl_smpl.loc[VolSmpl_smpl<2]=2
+    VolSmpl_smpl=np.round(VolSmpl_smpl, decimals=1)
+    VolAcid_smpl=VolSmpl_smpl*undiluted_smpl/entries[4] - VolSmpl_smpl
+    VolAcid_smpl=np.round(VolAcid_smpl, decimals=1)
 
-    
-           
     
     #blkcorr_df=RunNaN_df.copy()
     CaConc_df.loc[i, isotopes]=CaConc_smpl
@@ -850,17 +849,18 @@ for col in repCPS_all_df.columns[5:]:
     #build into dataframe
     eldf=pd.DataFrame(elarray, columns=colnames)
     reps_expand_df=pd.concat([reps_expand_df, eldf], axis=1)   
-  
-    
-  
-    
-  
+
+
+
+
+###### Saving ######
+
 savepath=folder_select+'/Pygilent_out/'
 isExist = os.path.exists(savepath)
 
 if not isExist:
     os.makedirs(savepath)    
-  
+
 savename=textinputbox(title="Enter save name")
 tstamp=str(round(time.time()))
 
@@ -893,11 +893,7 @@ with pd.ExcelWriter(savepath+savename +'_Ca_'+ tstamp +'.xlsx') as writer:
     VolAcid_df.to_excel(writer, sheet_name='Vol acid (ul)')  
     for r, df in zip(ratioels, dflist):
         df.to_excel(writer, sheet_name=r)  
+    entries_df.to_excel(writer, sheet_name="parameters")
         
-
 #Finished message box
 tk.messagebox.showinfo("", "Processing complete")
-
-
-
-
