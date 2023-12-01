@@ -1,19 +1,12 @@
 import os
 import pandas as pd
 import numpy as np
-import sympy as sym
 from tkinter import filedialog
 import tkinter as tk
 import csv
-import math
-import warnings
-import statsmodels.api as sm
 import time
-import statistics
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import matplotlib 
-from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 
 ####### Functions ################
