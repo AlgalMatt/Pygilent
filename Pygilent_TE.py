@@ -428,6 +428,250 @@ def pickfig(df, xvar, title):
     return np.array(df.index[selected_ind])
 
 
+def update_errorbar(errobj, x, y, xerr=None, yerr=None):
+    
+    """
+    Update the data and error bars of an existing errorbar plot.
+
+    Parameters:
+    - errobj (tuple): A tuple containing the line, caps, and bars objects of the errorbar plot.
+    - x (array-like): The x-coordinates of the data points.
+    - y (array-like): The y-coordinates of the data points.
+    - xerr (array-like, optional): The error in the x-direction. Default is None.
+    - yerr (array-like, optional): The error in the y-direction. Default is None.
+
+    Raises:
+    - AssertionError: If the errorbar object has an invalid number of dimensions for error bars,
+      or if the required error information is not provided.
+
+    Notes:
+    - The function updates the data points and error bars of an existing errorbar plot based on the input parameters.
+    - The errorbar object must contain the line, caps, and bars objects, and their structure is expected as follows:
+        - If there are 2 dimensions of error bars, both xerr and yerr must be provided.
+        - If there is 1 dimension of error bars, either xerr or yerr must be provided.
+
+    Example:
+    >>> update_errorbar(errorbar_object, x_data, y_data, xerr=error_x, yerr=error_y)
+    """
+    
+    ln, caps, bars = errobj
+
+
+    if len(bars) == 2:
+        assert xerr is not None and yerr is not None, "Your errorbar object has 2 dimension of error bars defined. You must provide xerr and yerr."
+        barsx, barsy = bars  # bars always exist (?)
+        try:  # caps are optional
+            errx_top, errx_bot, erry_top, erry_bot = caps
+        except ValueError:  # in case there is no caps
+            pass
+
+    elif len(bars) == 1:
+        assert (xerr is     None and yerr is not None) or\
+               (xerr is not None and yerr is     None),  \
+               "Your errorbar object has 1 dimension of error bars defined. You must provide xerr or yerr."
+
+        if xerr is not None:
+            barsx, = bars  # bars always exist (?)
+            try:
+                errx_top, errx_bot = caps
+            except ValueError:  # in case there is no caps
+                pass
+        else:
+            barsy, = bars  # bars always exist (?)
+            try:
+                erry_top, erry_bot = caps
+            except ValueError:  # in case there is no caps
+                pass
+
+    ln.set_data(x,y)
+
+    try:
+        errx_top.set_xdata(x + xerr)
+        errx_bot.set_xdata(x - xerr)
+        errx_top.set_ydata(y)
+        errx_bot.set_ydata(y)
+    except NameError:
+        pass
+    try:
+        barsx.set_segments([np.array([[xt, y], [xb, y]]) for xt, xb, y in zip(x + xerr, x - xerr, y)])
+    except NameError:
+        pass
+
+    try:
+        erry_top.set_xdata(x)
+        erry_bot.set_xdata(x)
+        erry_top.set_ydata(y + yerr)
+        erry_bot.set_ydata(y - yerr)
+    except NameError:
+        pass
+    try:
+        barsy.set_segments([np.array([[x, yt], [x, yb]]) for x, yt, yb in zip(x, y + yerr, y - yerr)])
+    except NameError:
+        pass
+
+
+def stndblk_picker(cps_df, sd_df, pa_df, table_df, title):
+    
+    
+    global selected_ind, variable
+    xvar=cps_df['Elapse'].values/3600
+    cps_df_modified=cps_df.copy()
+    variable=cps_df['isotope_gas'].values[0]
+    selected_ind={k: np.array([], dtype=int) for k in cps_df['isotope_gas'].values}
+    df_index=cps_df.index.values
+    
+    def on_pick(event):
+        global ind, selected_ind
+        ind = event.ind
+
+        newind=np.setdiff1d(ind, selected_ind[variable])
+        
+        #If the user has selected a new unselected point
+        if newind.size>0:
+            #Save the data index to the dictionary of isotopes
+            selected_ind[variable]=np.append(selected_ind[variable], newind)
+            cps_df_modified.loc[df_index[ind], variable]=np.nan    
+        #If the user has clicked on an already selected point    
+        else:
+            selected_ind[variable]=np.setdiff1d(selected_ind[variable], ind)
+            cps_df_modified.loc[df_index[ind], variable]=cps_df.loc[df_index[ind], variable]
+        #Re-calculate means, standard deviations, and quartiles    
+        iso_mean=np.nanmean(cps_df_modified.loc[df_index[ind], variable])
+        iso_sd=np.nanstd(cps_df_modified.loc[df_index[ind], variable])
+        q75, q25 = np.percentile(cps_df_modified.loc[df_index[ind], variable], [75 ,25])
+        
+        #Re-draw the figure
+        scatter2.set_data(xvar, cps_df_modified.loc[df_index[ind], variable])
+        mean_line.set_ydata([iso_mean, iso_mean])
+        sd_line_upper.set_ydata([iso_mean+iso_sd*2, iso_mean+iso_sd*2])
+        out_line_upper.set_ydata([q75+(q75-q25)*outmod, q75+(q75-q25)*outmod])
+        sd_line_lower.set_ydata([iso_mean-iso_sd*2, iso_mean-iso_sd*2])
+        out_line_lower.set_ydata([q25-(q75-q25)*outmod, q25-(q75-q25)*outmod])
+        fig.canvas.draw_idle()
+    
+    
+    # Create the initial plot without showing the figure
+    fig, ax = plt.subplots()
+    scatter1, = ax.plot([], [], linestyle='None', marker='o', color='red', picker=5, mec='r')
+    scatter2, = ax.plot([], [], linestyle='None', marker='o', color='blue', mec='b')
+    scatter_outs, = ax.plot([], [], linestyle='None', marker='o', 
+                            mfc='none', mec='r', mew=1)
+    mean_line=ax.axhline(y=0, ls='-', color='black')
+    sd_line_upper=ax.axhline(y=0, ls='--', color='black')
+    out_line_upper=ax.axhline(y=0, ls=':', color='black')
+    sd_line_lower=ax.axhline(y=0, ls='--', color='black')
+    out_line_lower=ax.axhline(y=0, ls=':', color='black')
+    PA_annotate_ls=[ax.text(0, 0, [], fontsize=12, ha='right', va='bottom') 
+                    for i in df_index]
+    
+    ax.set_xlabel('Analysis time (hours)')
+    ax.set_ylabel(variable+ ' cps')
+    ax.legend(['Remove', 'Keep', 'Recommend (outlier)', 'Mean', '2$\sigma$', 'outlier threshold'])
+    
+    # Register the pick event
+    fig.canvas.mpl_connect('pick_event', on_pick)
+    
+    plt.close(fig)  # Close the figure to prevent it from being displayed
+    
+    
+    
+    # Define the update function for the dropdown (changing isotopes)
+    def update_y_axis(*args):
+        global variable
+        variable = dropdown_var.get()
+        
+        #Show the outliers recommended for removal
+        outs=outsbool(cps_df.loc[df_index, variable].astype(float), mod=outmod)
+        
+        #calculate the means, sd and quartiles
+        iso_mean=np.nanmean(cps_df_modified.loc[df_index, variable])
+        iso_sd=np.nanstd(cps_df_modified.loc[df_index, variable])
+        q75, q25 = np.percentile(cps_df_modified.loc[df_index, variable], [75 ,25])
+        
+        #Re-draw the figure
+        scatter1.set_data(xvar, cps_df.loc[df_index, variable])
+        scatter2.set_data(xvar, cps_df_modified.loc[df_index, variable])
+        scatter_outs.set_data(xvar[outs], cps_df_modified.loc[df_index[outs], variable])
+        mean_line.set_ydata([iso_mean, iso_mean])
+        sd_line_upper.set_ydata([iso_mean+iso_sd*2, iso_mean+iso_sd*2])
+        out_line_upper.set_ydata([q75+(q75-q25)*outmod, q75+(q75-q25)*outmod])
+        sd_line_lower.set_ydata([iso_mean-iso_sd*2, iso_mean-iso_sd*2])
+        out_line_lower.set_ydata([q25-(q75-q25)*outmod, q25-(q75-q25)*outmod])
+        
+        for i, txt in enumerate(PA_annotate_ls):
+            txt.set_position((xvar[i], cps_df.loc[df_index[i], variable].astype(float)))
+            PA_text=pa_df.loc[df_index[i], variable]
+            txt.set_text(PA_text)
+        
+        ax.set_ylabel(variable)
+        ax.relim()
+        ax.autoscale_view()
+        fig.canvas.draw_idle()
+        
+
+    # Create the Tkinter window
+    window = tk.Tk()
+    window.title(title)
+    
+    #Keep the window at the front of other apps.
+    window.lift()
+    window.attributes("-topmost", True)
+    
+    plot_frame = ttk.Frame(window)
+    plot_frame.grid(row=0, column=0, sticky='nsew')
+    
+    table_frame = ttk.Frame(window)
+    table_frame.grid(row=0, column=1, sticky='nsew')
+    
+    
+        # Create a treeview widget for the table
+    outlier_table = ttk.Treeview(table_frame, columns=table_df.columns, show='headings')
+    
+        # Define columns based on DataFrame columns
+    outlier_table['columns'] = list(table_df.columns)
+
+    # Set column headings
+    for col in table_df.columns:
+        outlier_table.heading(col, text=col)
+    
+    # Insert data from DataFrame
+    for index, row in table_df.iterrows():
+        outlier_table.insert(parent='', index='end', iid=index, values=list(row))
+
+    # Pack the table
+    outlier_table.pack(expand=tk.YES, fill=tk.BOTH)
+    
+    vsb = ttk.Scrollbar(table_frame, orient="vertical", command=outlier_table.yview)
+    vsb.pack(side='right', fill='y')
+    outlier_table.configure(yscrollcommand=vsb.set)
+
+
+    # Configure grid weights to make the frames resizable
+    window.grid_columnconfigure(0, weight=1)
+    window.grid_columnconfigure(1, weight=1)
+    
+    
+    # Create the dropdown menu
+    dropdown_var = tk.StringVar(plot_frame)
+    dropdown_var.set('Choose an isotope')  
+    dropdown = tk.OptionMenu(plot_frame, dropdown_var, *isotopes, command=update_y_axis)
+    dropdown.pack(padx=10, pady=10)
+    
+    
+    submit_button = tk.Button(plot_frame, text="Submit", command=lambda: window.destroy())
+    submit_button.pack(side = tk.BOTTOM)
+
+
+    # Create the FigureCanvasTkAgg object
+    canvas = FigureCanvasTkAgg(fig, master=plot_frame)
+    canvas.draw()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+    
+    # Run the Tkinter event loop
+    window.mainloop()
+    
+    
+    return cps_df_modified
 
 
 
@@ -1311,35 +1555,43 @@ def repeditor(df, pa, title, table_df, id):
         if newind.size>0:
             #Save the data index to the dictionary of isotopes
             selected_ind[variable]=np.append(selected_ind[variable], newind)
-            df2.loc[variable, repnames[ind]]=np.nan
-            scatter2.set_data(xvar, df2.loc[variable, repnames])
-            hline.set_ydata([np.nanmean(df2.loc[variable,repnames]),
-                             np.nanmean(df2.loc[variable,repnames])])
-            fig.canvas.draw_idle()
+            df2.loc[variable, repnames[ind]]=np.nan    
         #If the user has clicked on an already selected point    
         else:
             selected_ind[variable]=np.setdiff1d(selected_ind[variable], ind)
             df2.loc[variable, repnames[ind]]=df.loc[variable, repnames[ind]]
-            scatter2.set_data(xvar, df2.loc[variable,repnames])
-            hline.set_ydata([np.nanmean(df2.loc[variable,repnames]),
-                             np.nanmean(df2.loc[variable,repnames])])
-            fig.canvas.draw_idle()
+        #Re-calculate means, standard deviations, and quartiles    
+        iso_mean=np.nanmean(df2.loc[variable,repnames])
+        iso_sd=np.nanstd(df2.loc[variable,repnames])
+        q75, q25 = np.percentile(df2.loc[variable, repnames], [75 ,25])
+        
+        #Re-draw the figure
+        scatter2.set_data(xvar, df2.loc[variable, repnames])
+        mean_line.set_ydata([iso_mean, iso_mean])
+        sd_line_upper.set_ydata([iso_mean+iso_sd*2, iso_mean+iso_sd*2])
+        out_line_upper.set_ydata([q75+(q75-q25)*outmod, q75+(q75-q25)*outmod])
+        sd_line_lower.set_ydata([iso_mean-iso_sd*2, iso_mean-iso_sd*2])
+        out_line_lower.set_ydata([q25-(q75-q25)*outmod, q25-(q75-q25)*outmod])
+        fig.canvas.draw_idle()
     
     
- 
     # Create the initial plot without showing the figure
     fig, ax = plt.subplots()
     scatter1, = ax.plot([], [], linestyle='None', marker='o', color='red', picker=5, mec='r')
     scatter2, = ax.plot([], [], linestyle='None', marker='o', color='blue', mec='b')
     scatter_outs, = ax.plot([], [], linestyle='None', marker='o', 
                             mfc='none', mec='r', mew=1)
-    hline=ax.axhline(y=0, ls='--', color='black')
+    mean_line=ax.axhline(y=0, ls='-', color='black')
+    sd_line_upper=ax.axhline(y=0, ls='--', color='black')
+    out_line_upper=ax.axhline(y=0, ls=':', color='black')
+    sd_line_lower=ax.axhline(y=0, ls='--', color='black')
+    out_line_lower=ax.axhline(y=0, ls=':', color='black')
     PA_annotate_ls=[ax.text(0, 0, [], fontsize=12, ha='right', va='bottom') 
                     for rep in repnames]
     
     ax.set_xlabel('Replicate number')
     ax.set_ylabel(variable)
-    ax.legend(['Remove', 'Keep', 'Recommend (outlier)', 'Mean'])
+    ax.legend(['Remove', 'Keep', 'Recommend (outlier)', 'Mean', '2$\sigma$', 'outlier threshold'])
     
     # Register the pick event
     fig.canvas.mpl_connect('pick_event', on_pick)
@@ -1348,20 +1600,28 @@ def repeditor(df, pa, title, table_df, id):
     
     
     
-    # Define the update function for the dropdown
+    # Define the update function for the dropdown (changing isotopes)
     def update_y_axis(*args):
         global variable
         variable = dropdown_var.get()
         
-        #Show the recommended outliers for removal
+        #Show the outliers recommended for removal
         outs=outsbool(df.loc[variable, repnames].astype(float), mod=outmod)
         
+        #calculate the means, sd and quartiles
+        iso_mean=np.nanmean(df2.loc[variable,repnames])
+        iso_sd=np.nanstd(df2.loc[variable,repnames])
+        q75, q25 = np.percentile(df2.loc[variable, repnames], [75 ,25])
         
+        #Re-draw the figure
         scatter1.set_data(xvar, df.loc[variable, repnames])
         scatter2.set_data(xvar, df2.loc[variable, repnames])
         scatter_outs.set_data(xvar[outs], df2.loc[variable, repnames[outs]])
-        hline.set_ydata([np.nanmean(df2.loc[variable, repnames]),
-                         np.nanmean(df2.loc[variable, repnames])])
+        mean_line.set_ydata([iso_mean, iso_mean])
+        sd_line_upper.set_ydata([iso_mean+iso_sd*2, iso_mean+iso_sd*2])
+        out_line_upper.set_ydata([q75+(q75-q25)*outmod, q75+(q75-q25)*outmod])
+        sd_line_lower.set_ydata([iso_mean-iso_sd*2, iso_mean-iso_sd*2])
+        out_line_lower.set_ydata([q25-(q75-q25)*outmod, q25-(q75-q25)*outmod])
         
         for i, txt in enumerate(PA_annotate_ls):
             txt.set_position((xvar[i], df.loc[variable, repnames[i]].astype(float)))
@@ -1472,10 +1732,7 @@ def repeditor(df, pa, title, table_df, id):
     window.grid_columnconfigure(0, weight=1)
     window.grid_columnconfigure(1, weight=1)
     
-    
-    
-    
-    
+
     
     # Create the dropdown menu
     dropdown_var = tk.StringVar(plot_frame)
@@ -3067,7 +3324,7 @@ if os.path.exists(archivepath):
     
 
     #Continue if any standards were selected by user
-    if stndlistchoice!=None:
+    if np.all(stndlistchoice!=None):
         #Get the name of the bracketing standard
         commonbrkt=Run_df.loc[brktrows, 'Sample Name'].value_counts().index[0]
         brktname=stnd_dict[commonbrkt].columns[0]
@@ -3273,26 +3530,17 @@ repCPS_all_df=pd.concat((Run_df, repCPS_all_df), axis=1)
 #Melt all the data into a single dataframe
 idcols=Run_df.columns
 
-Melt_df=repCPS_all_df.melt(id_vars=idcols, value_vars=isotopes, var_name='Isotope gas', 
-                            value_name='CPS reps')
-Melt_df[['Isotope gas', 'CPS mean']]=CPSmean_df.melt(
-    value_vars=isotopes, var_name='Isotope gas', value_name='CPS mean')
-Melt_df[['Isotope gas', 'CPS SD']]=CPSstd_df.melt(
-    value_vars=isotopes, var_name='Isotope gas', value_name='CPS SD')
-Melt_df[['Isotope gas', 'Ratio']]=ratio_smpl_df.melt(
-    value_vars=isotopes, var_name='Isotope gas', value_name='Ratio')
-Melt_df[['Isotope gas', 'Ratio se']]=ratio_smpl_se_df.melt(
-    value_vars=isotopes, var_name='Isotope gas', value_name='Ratio se')
-Melt_df[['Isotope gas', 'Brkted']]=brkt_smpl_df.melt(
-    value_vars=isotopes, var_name='Isotope gas', value_name='Brkted')
-Melt_df[['Isotope gas', 'Brkted se']]=brkt_smpl_se_df.melt(
-    value_vars=isotopes, var_name='Isotope gas', value_name='Brkted se')
-Melt_df[['Isotope gas', 'Cali_single']]=cali_sing_df.melt(
-    value_vars=isotopes, var_name='Isotope gas', value_name='Cali_single')
-Melt_df[['Isotope gas', 'Cali_single_se']]=cali_sing_se_df.melt(
-    value_vars=isotopes, var_name='Isotope gas', value_name='Cali_single_se')
-Melt_df[['Isotope gas', 'PA']]=PA_df.melt(
-    value_vars=isotopes, var_name='Isotope gas', value_name='PA')
+df_list=[CPSmean_df, CPSstd_df, ratio_smpl_df, ratio_smpl_se_df, 
+         brkt_smpl_df, brkt_smpl_se_df, cali_sing_df, cali_sing_se_df, PA_df]
+val_names=['cps_mean', 'cps_sd', 'ratio', 'ratio_se', 'brkted', 'brkted_se', 
+           'cali_single', 'cali_single_se', 'PA']
+
+Melt_df=repCPS_all_df.melt(id_vars=idcols, value_vars=isotopes, var_name='isotope_gas', 
+                            value_name='cps_reps')
+
+for df, val_name in zip(df_list, val_names):
+    Melt_df[['isotope_gas', val_name]]=df.melt(
+        value_vars=isotopes, var_name='Isotope gas', value_name=val_name)
 
 Melt_df['BrktStnd']=brktname
 
@@ -3301,37 +3549,37 @@ Melt_df['BrktStnd']=brktname
 #so they can be added to the final data
 gasmode_dict=dict(zip(isotopes, Gasmodes))  
 for iso in isotopes:
-    Melt_df.loc[Melt_df['Isotope gas']==iso,'LoD']=float(
+    Melt_df.loc[Melt_df['isotope_gas']==iso,'lod']=float(
         LoD_df.loc[0,iso])
-    Melt_df.loc[Melt_df['Isotope gas']==iso,'Gas mode']=gasmode_dict[iso]
-    Melt_df.loc[Melt_df['Isotope gas']==iso,'intTime']=inttime_dict[iso]
-    Melt_df.loc[Melt_df['Isotope gas']==iso, 'N']=rep_cps_long_df.loc[
+    Melt_df.loc[Melt_df['isotope_gas']==iso,'gas_mode']=gasmode_dict[iso]
+    Melt_df.loc[Melt_df['isotope_gas']==iso,'int_time']=inttime_dict[iso]
+    Melt_df.loc[Melt_df['isotope_gas']==iso, 'n']=rep_cps_long_df.loc[
         rep_cps_long_df['isotope_gas']==iso, 'rep_num'].values
 
 for k in ratioels.keys():
     Melt_df.loc[Melt_df['Gas mode']==k,'Ratio iso']=ratioels[k]
 
 for iso in calivals_df.index:
-    Melt_df.loc[Melt_df['Isotope gas']==iso,'units'
+    Melt_df.loc[Melt_df['isotope_gas']==iso,'units'
                    ]=calivals_df.loc[iso, 'Units']
     
 
 
 if calistyle=='Calibration curve':
-    Melt_df[['Isotope gas', 'Cali_curve']]=cali_curv_df.melt(
+    Melt_df[['isotope_gas', 'cali_curve']]=cali_curv_df.melt(
         value_vars=isotopes, var_name='Isotope gas', value_name='Cali_curve')
-    Melt_df[['Isotope gas', 'Cali_curve_se']]=cali_curv_se_df.melt(
+    Melt_df[['isotope_gas', 'cali_curve_se']]=cali_curv_se_df.melt(
         value_vars=isotopes, var_name='Isotope gas', value_name='Cali_curve_se')     
     for iso in isotopes:
-        Melt_df.loc[Melt_df['Isotope gas']==iso,'r_sq']=float(
+        Melt_df.loc[Melt_df['isotope_gas']==iso,'r_sq']=float(
             params_df.loc['r_sq', iso])
-        Melt_df.loc[Melt_df['Isotope gas']==iso,'beta0']=float(
+        Melt_df.loc[Melt_df['isotope_gas']==iso,'beta0']=float(
             params_df.loc['beta0', iso])
-        Melt_df.loc[Melt_df['Isotope gas']==iso,'beta0_se']=float(
+        Melt_df.loc[Melt_df['isotope_gas']==iso,'beta0_se']=float(
             params_df.loc['beta0_1se', iso])
-        Melt_df.loc[Melt_df['Isotope gas']==iso,'beta1']=float(
+        Melt_df.loc[Melt_df['isotope_gas']==iso,'beta1']=float(
             params_df.loc['beta1', iso])
-        Melt_df.loc[Melt_df['Isotope gas']==iso,'beta1_se']=float(
+        Melt_df.loc[Melt_df['isotope_gas']==iso,'beta1_se']=float(
             params_df.loc['beta1_1se', iso])
 
 
