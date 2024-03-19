@@ -3,4 +3,4 @@ dist/
 #Ignore the build directory
 build/
 #Ignore csv files
-*.csv
+AgilentArchive.csv
