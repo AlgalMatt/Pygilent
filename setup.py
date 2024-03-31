@@ -1,13 +1,13 @@
 import setuptools
 
 setuptools.setup(
-    name="agilent",
+    name="Pygilent",
     version="0.1.0",
-    url="https://github.com/kiwidamien/roman",
-    author="Damien Martin",
-    author_email="damien.j.martin@gmail.com",
-    description="Allows conversion of Roman numerals to ints (and vice versa)",
-    long_description=open('DESCRIPTION.rst').read(),
+    url="https://github.com/AlgalMatt/Pygilent",
+    author="Matt Dumont",
+    author_email="mdumont1989@gmail.com",
+    description="Tools for working with Agilent data files.",
+    #long_description=open('DESCRIPTION.rst').read(),
     packages=setuptools.find_packages(),
     install_requires=[],
     classifiers=[

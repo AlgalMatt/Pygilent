@@ -1,6 +1,6 @@
 #Ignore the dist directory
-dist/
+scripts/dist/
 #Ignore the build directory
-build/
+scripts/build/
 #Ignore csv files
 AgilentArchive.csv

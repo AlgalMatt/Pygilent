@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib
 import pandas as pd
+import os
+from pathlib import Path
 
 def contains1d(array1, string1, ret_array=True, case_sensitive=False):
     """
@@ -1846,3 +1848,190 @@ def display_dataframe_with_option(df):
     root.mainloop()
     
     return result  # Return the result after the window is destroyed
+def iso_to_el(string):
+    element=string.split('_')[0].strip('1234567890')
+    return element
+def stnd_vals_df(df, stnd_names, isotopes):
+    new_df=pd.DataFrame()
+    for iso in isotopes:
+        vals=np.array(df.loc[iso_to_el(iso), stnd_names])
+        vals_df=pd.DataFrame(dict(zip(stnd_names, vals)), index=[iso])
+        units=df.loc[iso_to_el(iso), 'Units']
+        vals_df.insert(0, 'Units', units)
+        new_df=pd.concat([new_df, vals_df], axis=0)
+    return new_df
+
+
+def unarchive_replicates(rep_list):
+    pattern=r'(\d*\.\d+|[PAU])'
+    rep_df=rep_list.str.extractall(pattern).unstack()
+    rep_df=rep_df.droplevel(0, axis=1)
+    rep_df.rename(columns={i: i+1 for i in rep_df.columns}, inplace=True)
+    return rep_df
+    
+    
+    
+
+def setup_progress_bar(text=''):
+    
+    #set up the progressbar
+    root=tk.Tk()
+    progressbar = ttk.Progressbar(root, orient=tk.HORIZONTAL, length=400)
+    root.title('Progress')
+
+    #Keep the window at the front of other apps.
+    root.lift()
+    root.attributes("-topmost", True)
+
+    w = 300 # width for the Tk root
+    h = 100 # height for the Tk root
+
+    # get screen width and height
+    ws = root.winfo_screenwidth() # width of the screen
+    hs = root.winfo_screenheight() # height of the screen
+
+    # calculate x and y coordinates for the Tk root window
+    x = (ws/2) - (w/2)
+    y = (hs/2) - (h/2)
+
+    # set the dimensions of the screen 
+    # and where it is placed
+    root.geometry('%dx%d+%d+%d' % (w, h, x, y))
+
+    l = tk.Label(root, text = text)
+    l.pack(side=tk.TOP)
+    progressbar.pack(side=tk.BOTTOM)
+    progressbar['value']=0  
+    progressbar.update()
+    return root, progressbar
+
+cwd=Path(os.getcwd())
+archive_path=cwd.parent.parent/'Agilent_EDA'/'data'/'bigdf_240226.csv'
+archive_df=pd.read_csv(archive_path, index_col=0)
+run_name=pd.unique(archive_df['run_name'])
+df=archive_df.loc[archive_df['run_name']==run_name[-1]].copy()
+
+df.loc[df['type'].str.contains('Cali_STGFrm'), 'type']='Bracket & Cali_STGFrm'
+
+def archive_to_batch(df, run_name=None, stnd_df=None):
+    if run_name is None:
+        run_name=pd.unique(df['run_name'])
+        if len(run_name)>1:
+            raise ValueError('Multiple run names detected. Please specify a run name.')
+        
+    df=df.loc[df['run_name']==run_name].copy()
+    
+
+    #get the isotopes, ratio isotopes, gas modes, blank order, bracket order
+    isotopes=pd.unique(df['isotope_gas'])
+    ratio_iso=pd.unique(df['ratio_iso'])
+    gas_modes=pd.unique(df['gas_mode'])
+    blk_order=pd.unique(df.loc[df['type'].str.contains('Blank'), 'run_order'])
+    brkt_order=pd.unique(df.loc[df['type'].str.contains('Bracket'), 'run_order'])
+    
+    #define the calibration mode
+    if ~np.all(pd.isna(df['ratio_iso'])) & ~np.all(pd.isna(df['cali_curve'])):
+        cali_mode='Ratio calibration curve'
+    elif ~np.all(pd.isna(df['ratio_iso'])) & np.all(pd.isna(df['cali_curve'])):
+        cali_mode='Ratio single-point'
+    elif np.all(pd.isna(df['ratio_iso'])) & ~np.all(pd.isna(df['cali_curve'])):
+        cali_mode='Conc calibration curve'
+    else:
+        cali_mode=None
+    
+    #define the number of replicates
+    rep_num=pd.unique(df['total_reps'])
+    
+    #define the brkt stnd name
+    brkt_stnd=pd.unique(df['brkt_stnd'])[0]
+    
+    #define the order of the calibration stnds as a dict
+    cali_order={}
+    cali_type_names=pd.unique(df.loc[df['type'].str.contains('Cali'), 'type'])
+    for type_name in cali_type_names:
+        type_name_arr=np.array(type_name.split())
+        idx=np.char.find(type_name_arr, 'Cali')==0
+        cali_name=type_name_arr[idx].strip('Cali_')
+        cali_name_order=pd.unique(df.loc[df['type'].str.contains(cali_name), 'run_order'])
+        cali_order[cali_name]=cali_name_order
+    
+    
+    #define the replicate df
+    
+    rep_df=unarchive_replicates(df['rep_list'])
+    
+    rep_df=pd.concat(df['run_name', 'run_order', 'time', 'sample_name', 
+                        'total_reps', 'session_time', 'vial', 'isotope_gas', 
+                        'mass', 'element', 'gas_mode'], rep_df, axis=1)
+    
+    rep_df.reset_index(drop=True, inplace=True)
+    rep_long_df=rep_df.melt(var_name='replicate', value_name='cps')
+        
+    
+    batched=Batch(df, isotopes, ratio_iso, gas_modes,  rep_long_df, 
+                  blk_order, brkt_order, brkt_stnd, cali_mode, 
+                  rep_num, cali_order, stnd_df)   
+        
+    
+    
+        
+
+
+
+## Classes
+
+class Batch:   
+    def __init__(self, df, isotopes, ratio_iso, gas_modes,  rep_long_df,
+                 blk_order, brkt_order, brkt_stnd, cali_mode, 
+                 rep_num, cali_order, stnd_df):
+        self.df = df
+        self.isotopes = isotopes
+        self.ratio_iso = ratio_iso
+        self.gas_modes = gas_modes
+        self.rep_num = rep_num
+        self.rep_long_df = rep_long_df
+        self.blk_order = blk_order 
+        self.brkt_order = brkt_order
+        self.cali_mode = cali_mode
+        self.cali_order = cali_order
+        self.stnd_df = stnd_df
+        self.brkt_stnd = brkt_stnd
+        
+    
+    
+    
+    
+        
+    def remove_outliers(self):
+        self.df = ratioel_rep_removal(self.df, self.repnames, self.ratioels, 
+                                      self.isotopes, self.Gasmodes)
+        
+    def display_dataframe(self):
+        return display_dataframe_with_option(self.df)
+    
+    def interactive_editor(self, title, id):
+        self.df = repeditor(self.df, self.rep_PA_all_df, title, self.rep_PA_all_df, id, 
+                            self.repnames, self.rep_PA_all_df, outmod=self.outmod)
+        
+    def calibration_plot(self, df1, df2, title, figpath, expected, xvar='run_order'):
+        calibration_plot(df1, df2, title, self.isotopes, self.repnames, self.repnames, 
+                         self.repnames, expected, xvar, figpath)
+        
+    def interactive_calibration_plot(self, df1, df2, title, figpath, expected, xvar='run_order'):
+        interactive_calibration_plot(df1, df2, title, self.isotopes, self.repnames, self.repnames, 
+                                     self.repnames, expected, xvar, figpath)
+        
+    def save_to_csv(self, path):
+        self.df.to_csv(path, index=False)
+        
+    def save_to_excel(self, path):
+        self.df.to_excel(path, index=False)
+        
+    def save_to_pickle(self, path):
+        self.df.to_pickle(path)
+        
+    def save_to_sql(self, path, table_name):
+        self.df.to_sql(table_name, path, index=False, if_exists='replace')
+
+
+
