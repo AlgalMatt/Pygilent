@@ -1,15 +1,13 @@
 import numpy as np
-import tkinter as tk
-from tkinter import ttk
-from tkinter.scrolledtext import ScrolledText
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import matplotlib
 import pandas as pd
 import os
 from pathlib import Path
+import warnings
+from Pygilent.stnds import get_default_stndvals, make_stndvals_df
 
-def contains1d(array1, string1, ret_array=True, case_sensitive=False):
+##Functions
+
+def find_substrings(array1, string1, ret_array=True, case_sensitive=False):
     """
     Looks for occurrences of substring(s) within an array of strings, returning
     a boolean array. Works similarly to the Pandas str.contains method but can 
@@ -71,193 +69,8 @@ def contains1d(array1, string1, ret_array=True, case_sensitive=False):
         if ret_array:
             retarray=np.any(retarray, axis=1)           
     return retarray
-def fancycheckbox(items,  title="", defaults=None, single=False):
-    """    
-    Creates a pop-up simple checkbox from a list of items. Returns indexes of 
-    the checked items.
 
-    Parameters
-    ----------
-    items : 1d array (list or numpy array)
-        list of items to fill the checkbox.
-    title : string, optional
-        Descriptive title of the checkbox window. The default is "".
-    defaults : boolean array, optional
-        Indexes which items to have check boxes ticked by default. 
-        The default is None.
-    single : boolean, optional
-        If true, only one checkbox can be selected. The default is False.
-
-    Returns
-    -------
-    selected_indexes : numpy.array
-        array of indexes of checked items.
-
-    """
-    global selected
-    #if no defaults used, create a list of False to implement defaults.
-    if defaults is None:
-        defaults=[False]*len(items)
-    # Create the main window
-    window = tk.Tk()
-    window.title(title)
-    #Keep the window at the front of other apps.
-    window.lift()
-    window.attributes("-topmost", True)
-    
-    
-    w = 400 # width for the Tk root
-    h = 700 # height for the Tk root
-    
-    # get screen width and height
-    ws = window.winfo_screenwidth() # width of the screen
-    hs = window.winfo_screenheight() # height of the screen
-    
-    # calculate x and y coordinates for the Tk root window
-    x = (ws/2) - (w/2)
-    y = (hs/2) - (h/2)
-    
-    # set the dimensions of the screen 
-    # and where it is placed
-    window.geometry('%dx%d+%d+%d' % (w, h, x, y))
-    
-    #make sure scrolling area always fills the window area
-    window.rowconfigure(1, weight=1)
-    window.columnconfigure(0, weight=1)
-       
-    # Create a list of booleans to store the state of each checkbox
-    selected = defaults
-    
-    # Function to update the list of selected items
-    def update_selected(var):
-        global selected        
-        if single:
-            for i in range(len(cb_vars)):
-                if i != var:
-                    cb_vars[i].set(False)
-                    cb_list[i]['bg']='white'
-        selected = [cb_vars[i].get() for i in range(len(cb_vars))]
-        if cb_vars[var].get():
-            cb_list[var]['bg']='yellow'
-        else:
-            cb_list[var]['bg']='white'
-    
-    def select_all():
-        global selected   
-        if np.all(selected):
-            for cb in cb_list:
-                cb.deselect()
-        else:
-            for cb in cb_list:
-                cb.select()
-        
-        
-    
-    # Create a list to store the checkbox variables
-    cb_vars = []
-       
-    #The title of the window
-    label=tk.Label(window, text=title, font=("Helvetica", 10))
-    label.grid(row=0, column=0, pady=5)
-    
-    textframe=ScrolledText(window, width=40, height=50)
-    textframe.grid(row=1, column=0, sticky='ewns')
-    cb_list=[]
-    # Create a 4-column grid of checkboxes
-    for i, item in enumerate(items):
-        cb_var = tk.BooleanVar()
-        cb = tk.Checkbutton(textframe, text=item, variable=cb_var,
-                            command=lambda var=i: update_selected(var), 
-                            font=("Arial",10),fg="black", bg="white")
-        
-        cb_list.append(cb)
-        textframe.window_create('end', window=cb)
-        textframe.insert('end', '\n')
-        cb_vars.append(cb_var)
-        if defaults[i]:
-            cb.select()
-            cb['bg']='yellow'
-
-    # Create a "Submit" button
-    submit_button = tk.Button(window, text="Submit", command=lambda: window.destroy())
-    submit_button.grid(row=2, column=0)
-    
-    
-    
-    # Create a "Submit" button
-   # select_all_button = tk.Button(window, text="Select all", command=select_all())
-   # select_all_button.grid(row=2, column=0)
-    
-    # Run the main loop
-    window.mainloop()
-    selected_indexes = np.array([i for i, x in enumerate(selected) if x])
-    return selected_indexes
-def textinputbox(title=""):
-    """
-    Creates a simple text input box window.
-
-    Parameters:
-    - title (str): The title of the input box window. Defaults to an empty string.
-
-    Returns:
-    - str: The user-inputted text when the 'Save' button is clicked.
-
-    Usage:
-    - Call the function with an optional title parameter to create a text input box window.
-    - The user can input text in the provided text area.
-    - Clicking the 'Save' button retrieves the inputted text and closes the window.
-    - The function returns the entered text.
-
-    Example:
-    user_input = textinputbox("Enter your name")
-    print(f"Hello, {user_input}!")
-    
-    """
-    
-    
-    #setup the window
-    root=tk.Tk()
-    
-    w = 200 # width for the Tk root
-    h = 100 # height for the Tk root
-    
-    # get screen width and height
-    ws = root.winfo_screenwidth() # width of the screen
-    hs = root.winfo_screenheight() # height of the screen
-    
-    # calculate x and y coordinates for the Tk root window
-    x = (ws/2) - (w/2)
-    y = (hs/2) - (h/2)
-    
-    # set the dimensions of the screen 
-    # and where it is placed
-    root.geometry('%dx%d+%d+%d' % (w, h, x, y))
-    
-    #make sure scrolling area always fills the window area
-    root.rowconfigure(1, weight=3)
-    root.rowconfigure(0, weight=2)
-    root.columnconfigure(0, weight=1)
-    
-    #The title of the window
-    label=tk.Label(root, text=title, font=("Helvetica", 14))
-    label.grid(row=0, column=0, pady=5)
-    root.title(title)
-    #Button function that saves input value and closes the window
-    def retrieve_input():
-        global inputValue
-        inputValue=textBox.get("1.0","end-1c")
-        root.destroy()
-    #Text input
-    textBox=tk.Text(root, height=2, width=10)
-    textBox.grid(row=1, column=0, sticky='ewns')
-    #Save button (see function above)
-    buttonSave=tk.Button(root, height=1, width=10, text="Save", 
-                        command=lambda: retrieve_input())
-    buttonSave.grid(row=2, column=0)  
-    
-    tk.mainloop()   
-    return inputValue   
-def outsbool(array1, mod=1.5):
+def find_outliers(array1, mod=1.5):
     """
     Returns boolean array where true values denote outliers in original array
     
@@ -285,1582 +98,33 @@ def outsbool(array1, mod=1.5):
         outs=np.isnan(array1)
         
     return outs
-def pickfig(df, xvar, title):
-    
-    """
-    Creates an interactive plot for selecting data points in a scatter plot.
-
-    Parameters:
-    - df (pd.DataFrame): The DataFrame containing the data.
-    - xvar (str): The column in df representing the x-axis values.
-    - title (str): The title of the Tkinter window.
-
-    Returns:
-    - np.array: An array of indices corresponding to the selected data points.
-
-    Usage:
-    - Call the function with the DataFrame, x-axis variable, and window title.
-    - The function opens a Tkinter window with an interactive scatter plot.
-    - Clicking on data points toggles between 'Remove' and 'Keep' status.
-    - Select the y-axis variable using the dropdown menu.
-    - Click 'Submit' to close the window and return the indices of the selected data points.
-
-    Example:
-    import pandas as pd
-
-    # Create a DataFrame
-    data = {'Time': [1, 2, 3, 4, 5],
-            'Value1': [10, 15, 7, 20, 12],
-            'Value2': [5, 8, 12, 18, 10]}
-
-    df = pd.DataFrame(data)
-
-    # Select data points interactively
-    selected_indices = pickfig(df, xvar='Time', title='Interactive Plot')
-    print(f"Selected indices: {selected_indices}")
-    
-    """
-    
-    
-    global selected_ind, variable
-    df[xvar]=df[xvar]/3600
-    df2=df.copy()
-    variable=df.columns[df.columns!=xvar][0]
-    selected_ind=np.array([], dtype=int)
-          
-    def on_pick(event):
-        global ind, selected_ind
-        ind = event.ind
-    
-        newind=np.setdiff1d(ind, selected_ind)
-        
-        if newind.size>0:
-            selected_ind=np.append(selected_ind, newind)
-            df2.iloc[ind]=np.nan
-            scatter2.set_data(df2[xvar], df2[variable])
-            fig.canvas.draw_idle()
-            
-        else:
-            selected_ind=np.setdiff1d(selected_ind, ind)
-            df2.iloc[ind]=df.iloc[ind]
-            scatter2.set_data(df2[xvar], df2[variable])
-            fig.canvas.draw_idle()
-    
-    
- 
-    # Create the initial plot without showing the figure
-    fig, ax = plt.subplots()
-    scatter1, = ax.plot([], [], linestyle='None', marker='o', color='red', picker=5)
-    scatter2, = ax.plot([], [], linestyle='None', marker='o', color='blue')
-    ax.set_xlabel('Analysis time (hours)')
-    ax.set_ylabel(variable)
-    ax.legend(['Remove', 'Keep'])
-    
-    
-    
-    # Register the pick event
-    fig.canvas.mpl_connect('pick_event', on_pick)
-    
-    plt.close(fig)  # Close the figure to prevent it from being displayed
-    
-    
-    # Define the update function for the dropdown
-    def update_y_axis(*args):
-        global variable
-        variable = dropdown_var.get()
-        scatter1.set_data(df[xvar], df[variable])
-        scatter2.set_data(df2[xvar], df2[variable])
-        ax.set_ylabel(variable)
-        ax.relim()
-        ax.autoscale_view()
-        fig.canvas.draw_idle()
-    
-    # Create the Tkinter window
-    window = tk.Tk()
-    window.title(title)
-    
-    
-    # Create the dropdown menu
-    dropdown_var = tk.StringVar(window)
-    dropdown_var.set("Choose an isotope")  # Set default value
-    dropdown = tk.OptionMenu(window, dropdown_var, *df.columns[df.columns!=xvar], 
-                             command=update_y_axis)
-    dropdown.pack(padx=10, pady=10)
-    
-    
-    submit_button = tk.Button(window, text="Submit", 
-                              command=lambda: window.destroy())
-    submit_button.pack( side = tk.BOTTOM)
-
-
-    
-    
-    # Create the FigureCanvasTkAgg object
-    canvas = FigureCanvasTkAgg(fig, master=window)
-    canvas.draw()
-    canvas.get_tk_widget().pack()
-    
-    # Run the Tkinter event loop
-    window.mainloop()
-    
-    
-    return np.array(df.index[selected_ind])
-def update_errorbar(errobj, x, y, xerr=None, yerr=None):
-    
-    """
-    Update the data and error bars of an existing errorbar plot.
-
-    Parameters:
-    - errobj (tuple): A tuple containing the line, caps, and bars objects of the errorbar plot.
-    - x (array-like): The x-coordinates of the data points.
-    - y (array-like): The y-coordinates of the data points.
-    - xerr (array-like, optional): The error in the x-direction. Default is None.
-    - yerr (array-like, optional): The error in the y-direction. Default is None.
-
-    Raises:
-    - AssertionError: If the errorbar object has an invalid number of dimensions for error bars,
-      or if the required error information is not provided.
-
-    Notes:
-    - The function updates the data points and error bars of an existing errorbar plot based on the input parameters.
-    - The errorbar object must contain the line, caps, and bars objects, and their structure is expected as follows:
-        - If there are 2 dimensions of error bars, both xerr and yerr must be provided.
-        - If there is 1 dimension of error bars, either xerr or yerr must be provided.
-
-    Example:
-    >>> update_errorbar(errorbar_object, x_data, y_data, xerr=error_x, yerr=error_y)
-    """
-    
-    ln, caps, bars = errobj
-
-
-    if len(bars) == 2:
-        assert xerr is not None and yerr is not None, "Your errorbar object has 2 dimension of error bars defined. You must provide xerr and yerr."
-        barsx, barsy = bars  # bars always exist (?)
-        try:  # caps are optional
-            errx_top, errx_bot, erry_top, erry_bot = caps
-        except ValueError:  # in case there is no caps
-            pass
-
-    elif len(bars) == 1:
-        assert (xerr is     None and yerr is not None) or\
-               (xerr is not None and yerr is     None),  \
-               "Your errorbar object has 1 dimension of error bars defined. You must provide xerr or yerr."
-
-        if xerr is not None:
-            barsx, = bars  # bars always exist (?)
-            try:
-                errx_top, errx_bot = caps
-            except ValueError:  # in case there is no caps
-                pass
-        else:
-            barsy, = bars  # bars always exist (?)
-            try:
-                erry_top, erry_bot = caps
-            except ValueError:  # in case there is no caps
-                pass
-
-    ln.set_data(x,y)
-
-    try:
-        errx_top.set_xdata(x + xerr)
-        errx_bot.set_xdata(x - xerr)
-        errx_top.set_ydata(y)
-        errx_bot.set_ydata(y)
-    except NameError:
-        pass
-    try:
-        barsx.set_segments([np.array([[xt, y], [xb, y]]) for xt, xb, y in zip(x + xerr, x - xerr, y)])
-    except NameError:
-        pass
-
-    try:
-        erry_top.set_xdata(x)
-        erry_bot.set_xdata(x)
-        erry_top.set_ydata(y + yerr)
-        erry_bot.set_ydata(y - yerr)
-    except NameError:
-        pass
-    try:
-        barsy.set_segments([np.array([[x, yt], [x, yb]]) for x, yt, yb in zip(x, y + yerr, y - yerr)])
-    except NameError:
-        pass
-def stndblk_picker(cps_df, sd_df, pa_df, table_df, title, outmod):
-    
-    
-    global selected_ind, variable
-    xvar=cps_df['session_time'].values/3600
-    cps_df_modified=cps_df.copy()
-    variable=cps_df['isotope_gas'].values[0]
-    selected_ind={k: np.array([], dtype=int) for k in cps_df['isotope_gas'].values}
-    df_index=cps_df.index.values
-    
-    def on_pick(event):
-        global ind, selected_ind
-        ind = event.ind
-
-        newind=np.setdiff1d(ind, selected_ind[variable])
-        
-        #If the user has selected a new unselected point
-        if newind.size>0:
-            #Save the data index to the dictionary of isotopes
-            selected_ind[variable]=np.append(selected_ind[variable], newind)
-            cps_df_modified.loc[df_index[ind], variable]=np.nan    
-        #If the user has clicked on an already selected point    
-        else:
-            selected_ind[variable]=np.setdiff1d(selected_ind[variable], ind)
-            cps_df_modified.loc[df_index[ind], variable]=cps_df.loc[df_index[ind], variable]
-        #Re-calculate means, standard deviations, and quartiles    
-        iso_mean=np.nanmean(cps_df_modified.loc[df_index[ind], variable])
-        iso_sd=np.nanstd(cps_df_modified.loc[df_index[ind], variable])
-        q75, q25 = np.percentile(cps_df_modified.loc[df_index[ind], variable], [75 ,25])
-        
-        #Re-draw the figure
-        scatter2.set_data(xvar, cps_df_modified.loc[df_index[ind], variable])
-        mean_line.set_ydata([iso_mean, iso_mean])
-        sd_line_upper.set_ydata([iso_mean+iso_sd*2, iso_mean+iso_sd*2])
-        out_line_upper.set_ydata([q75+(q75-q25)*outmod, q75+(q75-q25)*outmod])
-        sd_line_lower.set_ydata([iso_mean-iso_sd*2, iso_mean-iso_sd*2])
-        out_line_lower.set_ydata([q25-(q75-q25)*outmod, q25-(q75-q25)*outmod])
-        fig.canvas.draw_idle()
-    
-    
-    # Create the initial plot without showing the figure
-    fig, ax = plt.subplots()
-    scatter1, = ax.plot([], [], linestyle='None', marker='o', color='red', picker=5, mec='r')
-    scatter2, = ax.plot([], [], linestyle='None', marker='o', color='blue', mec='b')
-    scatter_outs, = ax.plot([], [], linestyle='None', marker='o', 
-                            mfc='none', mec='r', mew=1)
-    mean_line=ax.axhline(y=0, ls='-', color='black')
-    sd_line_upper=ax.axhline(y=0, ls='--', color='black')
-    out_line_upper=ax.axhline(y=0, ls=':', color='black')
-    sd_line_lower=ax.axhline(y=0, ls='--', color='black')
-    out_line_lower=ax.axhline(y=0, ls=':', color='black')
-    PA_annotate_ls=[ax.text(0, 0, [], fontsize=12, ha='right', va='bottom') 
-                    for i in df_index]
-    
-    ax.set_xlabel('Analysis time (hours)')
-    ax.set_ylabel(variable+ ' cps')
-    ax.legend(['Remove', 'Keep', 'Recommend (outlier)', 'Mean', '2$\sigma$', 'outlier threshold'])
-    
-    # Register the pick event
-    fig.canvas.mpl_connect('pick_event', on_pick)
-    
-    plt.close(fig)  # Close the figure to prevent it from being displayed
-    
-    
-    
-    # Define the update function for the dropdown (changing isotopes)
-    def update_y_axis(*args):
-        global variable
-        variable = dropdown_var.get()
-        
-        #Show the outliers recommended for removal
-        outs=outsbool(cps_df.loc[df_index, variable].astype(float), mod=outmod)
-        
-        #calculate the means, sd and quartiles
-        iso_mean=np.nanmean(cps_df_modified.loc[df_index, variable])
-        iso_sd=np.nanstd(cps_df_modified.loc[df_index, variable])
-        q75, q25 = np.percentile(cps_df_modified.loc[df_index, variable], [75 ,25])
-        
-        #Re-draw the figure
-        scatter1.set_data(xvar, cps_df.loc[df_index, variable])
-        scatter2.set_data(xvar, cps_df_modified.loc[df_index, variable])
-        scatter_outs.set_data(xvar[outs], cps_df_modified.loc[df_index[outs], variable])
-        mean_line.set_ydata([iso_mean, iso_mean])
-        sd_line_upper.set_ydata([iso_mean+iso_sd*2, iso_mean+iso_sd*2])
-        out_line_upper.set_ydata([q75+(q75-q25)*outmod, q75+(q75-q25)*outmod])
-        sd_line_lower.set_ydata([iso_mean-iso_sd*2, iso_mean-iso_sd*2])
-        out_line_lower.set_ydata([q25-(q75-q25)*outmod, q25-(q75-q25)*outmod])
-        
-        for i, txt in enumerate(PA_annotate_ls):
-            txt.set_position((xvar[i], cps_df.loc[df_index[i], variable].astype(float)))
-            PA_text=pa_df.loc[df_index[i], variable]
-            txt.set_text(PA_text)
-        
-        ax.set_ylabel(variable)
-        ax.relim()
-        ax.autoscale_view()
-        fig.canvas.draw_idle()
-        
-
-    # Create the Tkinter window
-    window = tk.Tk()
-    window.title(title)
-    
-    #Keep the window at the front of other apps.
-    window.lift()
-    window.attributes("-topmost", True)
-    
-    plot_frame = ttk.Frame(window)
-    plot_frame.grid(row=0, column=0, sticky='nsew')
-    
-    table_frame = ttk.Frame(window)
-    table_frame.grid(row=0, column=1, sticky='nsew')
-    
-    
-        # Create a treeview widget for the table
-    outlier_table = ttk.Treeview(table_frame, columns=table_df.columns, show='headings')
-    
-        # Define columns based on DataFrame columns
-    outlier_table['columns'] = list(table_df.columns)
-
-    # Set column headings
-    for col in table_df.columns:
-        outlier_table.heading(col, text=col)
-    
-    # Insert data from DataFrame
-    for index, row in table_df.iterrows():
-        outlier_table.insert(parent='', index='end', iid=index, values=list(row))
-
-    # Pack the table
-    outlier_table.pack(expand=tk.YES, fill=tk.BOTH)
-    
-    vsb = ttk.Scrollbar(table_frame, orient="vertical", command=outlier_table.yview)
-    vsb.pack(side='right', fill='y')
-    outlier_table.configure(yscrollcommand=vsb.set)
-
-
-    # Configure grid weights to make the frames resizable
-    window.grid_columnconfigure(0, weight=1)
-    window.grid_columnconfigure(1, weight=1)
-    
-    
-    # Create the dropdown menu
-    dropdown_var = tk.StringVar(plot_frame)
-    dropdown_var.set('Choose an isotope')  
-    dropdown = tk.OptionMenu(plot_frame, dropdown_var, *isotopes, command=update_y_axis)
-    dropdown.pack(padx=10, pady=10)
-    
-    
-    submit_button = tk.Button(plot_frame, text="Submit", command=lambda: window.destroy())
-    submit_button.pack(side = tk.BOTTOM)
-
-
-    # Create the FigureCanvasTkAgg object
-    canvas = FigureCanvasTkAgg(fig, master=plot_frame)
-    canvas.draw()
-    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-    
-    # Run the Tkinter event loop
-    window.mainloop()
-    
-    
-    return cps_df_modified
-def pickfig_cross(dfy, dfx, variables, title=None, fitted=None):
-    
-    """
-    Creates an interactive scatter plot for selecting data points in multiple y-axis variables.
-
-    Parameters:
-    - dfy (pd.DataFrame): The DataFrame containing the y-axis data.
-    - dfx (pd.DataFrame): The DataFrame containing the x-axis and variable data.
-    - variables (list): List of variable names to be plotted on the y-axis.
-    - title (str): The title of the Tkinter window. Defaults to None.
-    - fitted (pd.DataFrame): The DataFrame containing fitted values. Defaults to None.
-
-    Returns:
-    - dict: A dictionary containing selected indices for each variable.
-
-    Usage:
-    - Call the function with the y-axis DataFrame, x-axis DataFrame, list of variables,
-      optional title, and optional fitted values.
-    - The function opens a Tkinter window with an interactive scatter plot for each variable.
-    - Clicking on data points toggles between 'Remove' and 'Keep' status.
-    - Select the variable using the dropdown menu.
-    - Click 'Submit' to close the window and return the selected indices for each variable.
-
-    Example:
-    import pandas as pd
-
-    # Create DataFrames
-    dfx = pd.DataFrame({'Time': [1, 2, 3, 4, 5],
-                        'Value1': [10, 15, 7, 20, 12],
-                        'Value2': [5, 8, 12, 18, 10]})
-    
-    dfy = pd.DataFrame({'Value1': [20, 25, 15, 30, 18],
-                        'Value2': [15, 18, 22, 28, 20]})
-    
-    # Select data points interactively for multiple variables
-    selected_indices = pickfig_cross(dfy, dfx, variables=['Value1', 'Value2'], title='Interactive Plot')
-    print(f"Selected indices: {selected_indices}")
-    """
-    
-    global selected_ind, variable
-    dfx2=dfx.copy()
-    variable=variables[0]
-    selected_ind={k: np.array([], dtype=int) for k in variables}
-    
-    
-    def on_pick(event):
-        global ind, selected_ind
-        ind = dfx.index[event.ind]
-        
-    
-        newind=np.setdiff1d(ind, selected_ind[variable])
-        
-        if newind.size>0:
-            selected_ind[variable]=np.append(selected_ind[variable], newind)
-            dfx2.loc[ind, variable]=np.nan
-            scatter2.set_data(dfx2[variable], dfy[variable])
-            fig.canvas.draw_idle()
-            
-        else:
-            selected_ind[variable]=np.setdiff1d(selected_ind[variable], ind)
-            dfx2.loc[ind, variable]=dfx.loc[ind, variable]
-            scatter2.set_data(dfx2[variable], dfy[variable])
-            fig.canvas.draw_idle()
-            
- 
- 
-    # Create the initial plot without showing the figure
-    fig, ax = plt.subplots()
-    scatter1, = ax.plot([], [], linestyle='None', marker='o', color='red', picker=True)
-    scatter2, = ax.plot([], [], linestyle='None', marker='o', color='blue')
-    if all(fitted!=None):
-        fit1=ax.plot([], [], linestyle='-', marker=None, color='black')
-    ax.set_xlabel(variable)
-    ax.set_ylabel(variable)
-    ax.legend(['Remove', 'Keep'])
-    
-    
-    
-    # Register the pick event
-    fig.canvas.mpl_connect('pick_event', on_pick)
-    
-    plt.close(fig)  # Close the figure to prevent it from being displayed
-    
-    
-    # Define the update function for the dropdown
-    def update_y_axis(*args):
-        global variable
-        variable = dropdown_var.get()
-        scatter1.set_data(dfx[variable], dfy[variable])
-        scatter2.set_data(dfx2[variable], dfy[variable])
-        if all(fitted!=None):
-            fit1[0].set_data(dfx[variable], fitted[variable])
-        ax.set_ylabel(variable)
-        ax.set_xlabel(variable)
-        ax.relim()
-        ax.autoscale_view()
-        fig.canvas.draw_idle()
-        
-    
-    # Create the Tkinter window
-    window = tk.Tk()
-    window.title(title)
-    
-    
-    # Create the dropdown menu
-    dropdown_var = tk.StringVar(window)
-    dropdown_var.set("Choose an isotope")  # Set default value
-    dropdown = tk.OptionMenu(window, dropdown_var, *variables, 
-                             command=update_y_axis)
-    dropdown.pack(padx=10, pady=10)
-    
-    
-    submit_button = tk.Button(window, text="Submit", 
-                              command=lambda: window.destroy())
-    submit_button.pack( side = tk.BOTTOM)
-
-    # Create the FigureCanvasTkAgg object
-    canvas = FigureCanvasTkAgg(fig, master=window)
-    canvas.draw()
-    canvas.get_tk_widget().pack()
-    
-    # Run the Tkinter event loop
-    window.mainloop()
-    
-    
-    return selected_ind
-def blankfigsaver(df1, df2, iso_vars, variable='cps_mean',  title='Blanks CPS',  
-                  xvar='time', figpath='.'):
-    
-    """
-    Creates an interactive plot for saving figures of archive and batch data for selected isotopes.
-
-    Parameters:
-    - df1 (pd.DataFrame): Archive data DataFrame.
-    - df2 (pd.DataFrame): Batch data DataFrame.
-    - iso_vars (list): List of isotope names.
-    - variable (str): Variable to be plotted on the y-axis. Defaults to 'CPS mean'.
-    - title (str): Title of the Tkinter window. Defaults to 'Blanks CPS'.
-    - xvar (str): Variable for the x-axis. Defaults to 'Acq. Date-Time'.
-
-    Returns:
-    - None
-
-    Usage:
-    - Call the function with archive and batch DataFrames, list of isotope names,
-      optional y-axis variable, optional title, and optional x-axis variable.
-    - The function opens a Tkinter window with an interactive plot.
-    - Select the isotope using the dropdown menu.
-    - Click 'Save' to save the figure for the current isotope.
-    - Click 'Save all' to save figures for all isotopes.
-    - Click 'Exit' to close the window.
-
-    Example:
-    import pandas as pd
-
-    # Create DataFrames
-    df1 = pd.DataFrame({'isotope_gas': ['A', 'B', 'A', 'B'],
-                        'Acq. Date-Time': ['2023-01-01', '2023-01-02', '2023-01-03', '2023-01-04'],
-                        'CPS mean': [10, 15, 7, 20]})
-    
-    df2 = pd.DataFrame({'isotope_gas': ['A', 'B', 'A', 'B'],
-                        'Acq. Date-Time': ['2023-01-05', '2023-01-06', '2023-01-07', '2023-01-08'],
-                        'CPS mean': [5, 8, 12, 18]})
-    
-    # Save figures interactively
-    blankfigsaver(df1, df2, iso_vars=['A', 'B'])
-    """
-    
-    global iso
-    iso=iso_vars[0]
-    
-    #Isolate one element
-    df1_el=df1.loc[df1['isotope_gas']==iso]
-    if df1_el.size>0:
-        outs=outsbool(np.array(df1_el[variable]))
-        df1_el=df1_el.loc[~outs]
-    df2_el=df2.loc[df2['isotope_gas']==iso]
-    
-    def saveonefig():        
-        #Save the current figure
-        fig.savefig(figpath+'/'+title+iso+'.png')
-        
-    def saveallfig():   
-        
-         #reset the progressbar
-         progressbar['value']=0  
-         progressbar.update()
-         
-         for j, el in enumerate(iso_vars):
-            
-            #increment the progressbar
-            progressbar['value']=(j+1)/len(iso_vars)*100
-            progressbar.update()
-                 
-            #get the specific isotope data 
-            df1_elb=df1.loc[df1['isotope_gas']==el]
-            #remove outliers from archive
-            if df1_elb.size>0:
-                outs=outsbool(np.array(df1_elb[variable]))
-                df1_elb=df1_elb.loc[~outs]
-            df2_elb=df2.loc[df2['isotope_gas']==el]
-               
-            #plot figure
-            figall, ax = plt.subplots()
-            figall.set_figheight(6)
-            figall.set_figwidth(12)
-            #Archive data 
-            scatter1 = ax.scatter(df1_elb[xvar].astype('datetime64[ns]'), 
-                            df1_elb[variable],
-                            linestyle='None', marker='o', color='blue', s=4)
-            #Batch data 
-            scatter2 = ax.scatter(df2_elb[xvar].astype('datetime64[ns]'), 
-                            df2_elb[variable], 
-                            linestyle='None', marker='o', color='red', s=4)
-                                    
-            ax.xaxis.set_tick_params(rotation=45)
-            ax.set_xlabel(xvar)
-            ax.set_ylabel(variable+' '+el)
-            ax.legend(['Archive', 'This run'])
-            figall.savefig(figpath+'/'+title+el+'.png')
-            plt.close(figall)
-              
-     
-              
-     
-    #turn off interactive plotting
-    plt.ioff()
-
-    
-    # Create the initial plot without showing the figure
-    fig, ax = plt.subplots()   
-    #Archive data
-    scatter1 = ax.scatter(df1_el[xvar].astype('datetime64[ns]'), 
-                    df1_el[variable],
-                    linestyle='None', marker='o', color='blue', s=4)
-    #Batch data
-    scatter2 = ax.scatter(df2_el[xvar].astype('datetime64[ns]'), 
-                    df2_el[variable],
-                    linestyle='None', marker='o', color='red', s=4)
-    ax.xaxis.set_tick_params(rotation=45)
-    ax.set_xlabel(xvar)
-    ax.set_ylabel(variable+' '+iso)
-    ax.legend(['Archive', 'This run'])
-    
-    plt.close(fig)  # Close the figure to prevent it from being displayed
-    
-    
-    # Define the update function for the dropdown
-    def update_y_axis(*args):
-        global iso
-        iso = dropdown_var.get()
-        #Get specific isotope data, remove outliers from archive   
-        df1_el=df1.loc[df1['isotope_gas']==iso]
-        if df1_el.size>0:
-            outs=outsbool(np.array(df1_el[variable]))
-            df1_el=df1_el.loc[~outs]        
-        
-        df2_el=df2.loc[df2['isotope_gas']==iso]
-        
-        #clear the old data from the plot
-        ax.cla()
-        #add new data from selected isotope
-        scatter1 = ax.scatter(df1_el[xvar].astype('datetime64[ns]'), 
-                        df1_el[variable], 
-                        linestyle='None', marker='o', color='blue', s=4)
-        
-        scatter2 = ax.scatter(df2_el[xvar].astype('datetime64[ns]'), 
-                        df2_el[variable],
-                        linestyle='None', marker='o', color='red', s=4)
-        ax.xaxis.set_tick_params(rotation=45)
-        plt.xticks(rotation = 45)
-        ax.set_xlabel(xvar)
-        ax.set_ylabel(variable+' '+iso)
-        ax.legend(['Archive', 'This run'])
-        fig.canvas.draw_idle()
-    
-    # Create the Tkinter window
-    window = tk.Tk()
-    window.geometry("1000x800")
-    window.title(title)
-       
-    
-    button_frame = tk.Frame(window)
-    button_frame.pack(side=tk.TOP, padx=10, pady=10)
-    
-    
-    # Create the dropdown menu
-    dropdown_var = tk.StringVar(window)
-    dropdown_var.set("Choose the isotope")  # Set default value
-    dropdown = tk.OptionMenu(button_frame, dropdown_var, *iso_vars, 
-                             command=update_y_axis)
-    dropdown.pack(side=tk.LEFT)
-    
-    button_frame2 = tk.Frame(window)
-    button_frame2.pack(side=tk.BOTTOM)
-    
-    figure_frame = tk.Frame(window)
-    figure_frame.pack(fill=tk.BOTH,  side=tk.TOP)
-    
-    
-    # Create the FigureCanvasTkAgg object
-    canvas = FigureCanvasTkAgg(fig, master=figure_frame)
-    canvas.draw()
-    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, ipady=20)
-    
-    
-    #progress bar
-    progressbar = ttk.Progressbar(window, orient=tk.HORIZONTAL, length=400)
-    progressbar.pack(side=tk.BOTTOM)
-  
-    
-    Save_button = tk.Button(button_frame2, text="Save", 
-                              command=saveonefig)
-    SaveAll_button = tk.Button(button_frame2, text="Save all", 
-                              command=saveallfig)
-    Exit_button = tk.Button(button_frame2, text="Exit", 
-                              command=lambda: window.destroy())
-    
-    Save_button.pack(side=tk.LEFT)
-    SaveAll_button.pack(side=tk.LEFT)
-    Exit_button.pack(side=tk.LEFT)
-
-    # Run the Tkinter event loop
-    window.mainloop()
-def stdfigsaver(df1, df2, title, iso_vars, expected,
-                variables=['cali_single', 'cali_curve'],  
-                errors=['cali_single_se', 'cali_curve_se'],  
-             xvar='time', figpath='.'):
-    
-    """
-    Creates an interactive plot for saving figures of calibration data for selected isotopes.
 
-    Parameters:
-    - df1 (pd.DataFrame): Archive data DataFrame.
-    - df2 (pd.DataFrame): Batch data DataFrame.
-    - title (str): Title of the Tkinter window.
-    - iso_vars (list): List of isotope names.
-    - expected (dict): Dictionary with expected values for each isotope.
-    - variables (list): List of variables to be plotted on the y-axis. Defaults to ['cali_single', 'cali_curve'].
-    - errors (list): List of error variables corresponding to each variable. Defaults to ['cali_single_se', 'cali_curve_se'].
-    - xvar (str): Variable for the x-axis. Defaults to 'time'.
-
-    Returns:
-    - None
-
-    Usage:
-    - Call the function with archive and batch DataFrames, title, list of isotope names, dictionary of expected values,
-      optional list of y-axis variables, optional list of error variables, and optional x-axis variable.
-    - The function opens a Tkinter window with an interactive plot.
-    - Select the isotope using the dropdown menu.
-    - Click 'Save' to save the figure for the current isotope.
-    - Click 'Save all' to save figures for all isotopes.
-    - Click 'Exit' to close the window.
-
-    Example:
-    import pandas as pd
-
-    # Create DataFrames
-    df1 = pd.DataFrame({'isotope_gas': ['A', 'B', 'A', 'B'],
-                        'brkt_stnd': ['Bracket1', 'Bracket2', 'Bracket1', 'Bracket2'],
-                        'Acq. Date-Time': ['2023-01-01', '2023-01-02', '2023-01-03', '2023-01-04'],
-                        'cali_single': [10, 15, 7, 20],
-                        'cali_curve': [25, 30, 22, 35],
-                        'cali_single_se': [1, 1.5, 0.7, 2],
-                        'cali_curve_se': [2, 2.5, 1.2, 3]})
-    
-    df2 = pd.DataFrame({'isotope_gas': ['A', 'B', 'A', 'B'],
-                        'Acq. Date-Time': ['2023-01-05', '2023-01-06', '2023-01-07', '2023-01-08'],
-                        'cali_single': [5, 8, 12, 18],
-                        'cali_curve': [22, 28, 18, 30],
-                        'cali_single_se': [0.5, 0.8, 1.2, 1.8],
-                        'cali_curve_se': [1, 1.2, 1.5, 2]})
-    
-    expected_values = {'A': 15, 'B': 25}
-    
-    # Save figures interactively
-    stdfigsaver(df1, df2, title='Calibration Figures', iso_vars=['A', 'B'],
-                expected=expected_values, variables=['cali_single', 'cali_curve'])
-    """
-    
-    global iso
-    #set default value for the isotope
-    iso=iso_vars[0]
-    
-    #Make a colour map to for shading different bracketing standards
-    cmap = matplotlib.colormaps['rainbow'].resampled(len(pd.unique(df1['brkt_stnd'])))
-    
-    
-    #this will be a list of the archive dataframes with each entry corresponding
-    #to a different bracketing standard used.
-    df1_ls=[]
-    #cycle through the different bracketing standards
-    for brk in pd.unique(df1['brkt_stnd']):
-         
-        #Subset the dataframe for the given isotope and bracketing standard
-        df1_el=df1.loc[(df1['isotope_gas']==iso)&(df1['brkt_stnd']==brk)]
-        #If dataframe isn't empty, remove outliers in single-point data 
-        if (df1_el[variables[0]].size>0) & (any(~np.isnan(df1_el[variables[0]]))):
-            outs_s=outsbool(np.array(df1_el[variables[0]]))
-            outs_s=outs_s | outsbool(np.array(df1_el[errors[0]]))
-            df1_el.loc[outs_s, variables[0]]=np.nan       
-            #If cali-curve isn't empty, remove outliers in cali-curve data 
-            if (df1_el[variables[1]].size>0) & (any(~np.isnan(df1_el[variables[1]]))):
-                outs_c=outsbool(np.array(df1_el[variables[1]]))
-                outs_c=outs_c | outsbool(np.array(df1_el[errors[1]]))
-                df1_el.loc[outs_c, variables[1]]=np.nan
-        #add to the dataframe list
-        df1_ls.append(df1_el)
-        
-    #subset the run dataframe for the given isotope 
-    df2_el=df2.loc[df2['isotope_gas']==iso]
-    
-    
-    
-    #Save the current figure
-    def saveonefig():        
-        fig.savefig(figpath+'/'+title+'_'+iso+'.png')
-    
-    #Save all figures
-    def saveallfig():  
-         
-        #reset the progressbar
-        progressbar['value']=0  
-        progressbar.update()
-                
-        #cycle through each isotope
-        for j, el in enumerate(iso_vars):
-
-            #increment the progressbar
-            progressbar['value']=(j+1)/len(iso_vars)*100
-            progressbar.update()
-                
-                
-            #adjust the dataframes
-            #this will be a list of the archive dataframes with each entry corresponding
-            #to a different bracketing standard used.
-            df1_ls=[]
-            #cycle through the different bracketing standards
-            for brk in pd.unique(df1['brkt_stnd']):
-                 
-                #Subset the dataframe for the given isotope and bracketing standard
-                df1_el=df1.loc[(df1['isotope_gas']==el)&(df1['brkt_stnd']==brk)]
-                #If dataframe isn't empty, remove outliers in single-point data 
-                if (df1_el[variables[0]].size>0) & (any(~np.isnan(df1_el[variables[0]]))):
-                    outs_s=outsbool(np.array(df1_el[variables[0]]))
-                    outs_s=outs_s | outsbool(np.array(df1_el[errors[0]]))
-                    df1_el.loc[outs_s, variables[0]]=np.nan       
-                    #If cali-curve isn't empty, remove outliers in cali-curve data 
-                    if (df1_el[variables[1]].size>0) & (any(~np.isnan(df1_el[variables[1]]))):
-                        outs_c=outsbool(np.array(df1_el[variables[1]]))
-                        outs_c=outs_c | outsbool(np.array(df1_el[errors[1]]))
-                        df1_el.loc[outs_c, variables[1]]=np.nan
-                #add to the dataframe list
-                df1_ls.append(df1_el)
-                
-                #subset the run dataframe for the given isotope 
-                df2_el=df2.loc[df2['isotope_gas']==el]
-            
-      
-            # Create the initial plot without showing the figure
-            figall, ax = plt.subplots(nrows=1, ncols=2, sharex=True, sharey=True)   
-            figall.set_figheight(6)
-            figall.set_figwidth(12)
-                
-            #Cycle through bracketing standards in the archive data
-            for i, brk in enumerate(pd.unique(df1['brkt_stnd'])):
-                
-                #Single-point calibration archive data
-                if any(~np.isnan(df1_ls[i][variables[0]])):
-                    
-                    #shaded area showing +/-2SD
-                    ystdev2=df1_ls[i][variables[0]].std()*2
-                    ymean=df1_ls[i][variables[0]].mean()
-                    ax[0].axhspan(ymean-ystdev2, ymean+ystdev2, 
-                                  alpha=0.2, color=cmap(i), 
-                                  label='Archive calibrated by '+brk+r'$\mu \pm2\sigma$')
-                    #Archive data with +/-1SE errorbars
-                    scatter1_s = ax[0].errorbar(df1_ls[i][xvar].astype('datetime64[ns]'), 
-                                    df1_ls[i][variables[0]], yerr=df1_ls[i][errors[0]],
-                                    linestyle='None', marker='.', 
-                                    color=cmap(i), ms=4, 
-                                    label='Archive calibrated by '+brk+r'$ \pm1\sigma$')
-                 
-                #Calibation curve archive data    
-                if any(~np.isnan(df1_ls[i][variables[1]])):    
-                    
-                    #shaded area showing +/-2SD
-                    ystdev2=df1_ls[i][variables[1]].std()*2
-                    ymean=df1_ls[i][variables[1]].mean()
-                    ax[1].axhspan(ymean-ystdev2, ymean+ystdev2, 
-                                  alpha=0.2, color=cmap(i), 
-                                  label='Archive calibrated by '+brk+r'$\mu \pm2\sigma$')
-                    #Archive data with +/-1SE errorbars
-                    scatter1_c = ax[1].errorbar(df1_ls[i][xvar].astype('datetime64[ns]'), 
-                                    df1_ls[i][variables[1]], yerr=df1_ls[i][errors[1]],
-                                    linestyle='None', marker='.', 
-                                    color=cmap(i), ms=4, 
-                                    label='Archive calibrated by '+brk+r'$ \pm1\sigma$')
-                
-            #Single-point run data with +/-1SE errorbars       
-            scatter2_s = ax[0].errorbar(df2_el[xvar].astype('datetime64[ns]'), 
-                                df2_el[variables[0]], yerr=df2_el[errors[0]],
-                                linestyle='None', marker='s', color='black', ms=4, 
-                                label='This run'+r'$ \pm1\sigma$')
-
-            
-            if any(df2_el.columns == variables[1]):
-                #Calibration curve run data with +/-1SE errorbars
-                scatter2_c = ax[1].errorbar(df2_el[xvar].astype('datetime64[ns]'), 
-                                df2_el[variables[1]], yerr=df2_el[errors[1]],
-                                linestyle='None', marker='s', color='black', ms=4, 
-                                label='This run'+r'$ \pm1\sigma$')
-                
-            
-            
-            #draw expected values
-            if ~np.isnan(expected[el]):
-                ax[0].axhline(expected[el], color='black', label='Expected', ls='--')
-                ax[1].axhline(expected[el], color='black', label='Expected', ls='--')
-            
-            #Legend    
-            handles,labels = ax[0].get_legend_handles_labels()
-            ax[0].legend(handles, labels)
-            handles,labels = ax[1].get_legend_handles_labels()
-            ax[1].legend(handles, labels)
-            
-            #Titles and tick marks
-            ax[0].title.set_text('Single-point')
-            ax[1].title.set_text('Calibration curve')
-            ax[0].xaxis.set_tick_params(rotation=45)
-            ax[1].xaxis.set_tick_params(rotation=45)
-            #Axes labels
-            ax[0].set_xlabel(xvar)
-            ax[1].set_xlabel(xvar)
-            ax[0].set_ylabel(el)
-            #Main title
-            figall.suptitle(title)
-            
-            
-            figall.savefig(figpath+'/'+title+'_'+el+'.png')
-            plt.close(figall)
-            #plt.show()   
-    
- 
-    #turn off interactive plotting
-    plt.ioff()
-    
-    
-    # Create the initial plot without showing the figure
-    fig, ax = plt.subplots(nrows=1, ncols=2, sharex=True, sharey=True)   
-    
-    #Cycle through bracketing standards in the archive data
-    for i, brk in enumerate(pd.unique(df1['brkt_stnd'])):
-        
-        #Single-point calibration archive data
-        if any(~np.isnan(df1_ls[i][variables[0]])):
-            
-            #shaded area showing +/-2SD
-            ystdev2=df1_ls[i][variables[0]].std()*2
-            ymean=df1_ls[i][variables[0]].mean()
-            ax[0].axhspan(ymean-ystdev2, ymean+ystdev2, 
-                          alpha=0.2, color=cmap(i), 
-                          label='Archive calibrated by '+brk+r'$\mu \pm2\sigma$')
-            #Archive data with +/-1SE errorbars
-            scatter1_s = ax[0].errorbar(df1_ls[i][xvar].astype('datetime64[ns]'), 
-                            df1_ls[i][variables[0]], yerr=df1_ls[i][errors[0]],
-                            linestyle='None', marker='.', 
-                            color=cmap(i), ms=4, 
-                            label='Archive calibrated by '+brk+r'$ \pm1\sigma$')
-         
-        #Calibation curve archive data    
-        if any(~np.isnan(df1_ls[i][variables[1]])):    
-            
-            #shaded area showing +/-2SD
-            ystdev2=df1_ls[i][variables[1]].std()*2
-            ymean=df1_ls[i][variables[1]].mean()
-            ax[1].axhspan(ymean-ystdev2, ymean+ystdev2, 
-                          alpha=0.2, color=cmap(i), 
-                          label='Archive calibrated by '+brk+r'$\mu \pm2\sigma$')
-            #Archive data with +/-1SE errorbars
-            scatter1_c = ax[1].errorbar(df1_ls[i][xvar].astype('datetime64[ns]'), 
-                            df1_ls[i][variables[1]], yerr=df1_ls[i][errors[1]],
-                            linestyle='None', marker='.', 
-                            color=cmap(i), ms=4, 
-                            label='Archive calibrated by '+brk+r'$ \pm1\sigma$')
-        
-    #Single-point run data with +/-1SE errorbars       
-    scatter2_s = ax[0].errorbar(df2_el[xvar].astype('datetime64[ns]'), 
-                        df2_el[variables[0]], yerr=df2_el[errors[0]],
-                        linestyle='None', marker='s', color='black', ms=4, 
-                        label='This run'+r'$ \pm1\sigma$')
-
-    
-    if any(df2_el.columns == variables[1]):
-        #Calibration curve run data with +/-1SE errorbars
-        scatter2_c = ax[1].errorbar(df2_el[xvar].astype('datetime64[ns]'), 
-                        df2_el[variables[1]], yerr=df2_el[errors[1]],
-                        linestyle='None', marker='s', color='black', ms=4, 
-                        label='This run'+r'$ \pm1\sigma$')
-        
-    
-    
-    #draw expected values
-    if ~np.isnan(expected[iso]):
-        ax[0].axhline(expected[iso], color='black', label='Expected', ls='--')
-        ax[1].axhline(expected[iso], color='black', label='Expected', ls='--')
-    
-    #Legend    
-    handles,labels = ax[0].get_legend_handles_labels()
-    ax[0].legend(handles, labels)
-    handles,labels = ax[1].get_legend_handles_labels()
-    ax[1].legend(handles, labels)
-    
-    #Titles and tick marks
-    ax[0].title.set_text('Single-point')
-    ax[1].title.set_text('Calibration curve')
-    ax[0].xaxis.set_tick_params(rotation=45)
-    ax[1].xaxis.set_tick_params(rotation=45)
-    #Axes labels
-    ax[0].set_xlabel(xvar)
-    ax[1].set_xlabel(xvar)
-    ax[0].set_ylabel(iso)
-    #Main title
-    fig.suptitle(title)
-
-    plt.close(fig)  # Close the figure to prevent it from being displayed
-    
-    
-    
-    
-    
-    
-    # Define the update function for the dropdown
-    def update_y_axis(*args):
-        global iso
-            
-        
-        #set the isotope
-        iso = dropdown_var.get()
-        
-      
-        #this will be a list of the archive dataframes with each entry corresponding
-        #to a different bracketing standard used.
-        df1_ls=[]
-        #cycle through the different bracketing standards
-        for brk in pd.unique(df1['brkt_stnd']):
-             
-            #Subset the dataframe for the given isotope and bracketing standard
-            df1_el=df1.loc[(df1['isotope_gas']==iso)&(df1['brkt_stnd']==brk)]
-            #If dataframe isn't empty, remove outliers in single-point data 
-            if (df1_el[variables[0]].size>0) & (any(~np.isnan(df1_el[variables[0]]))):
-                outs_s=outsbool(np.array(df1_el[variables[0]]))
-                outs_s=outs_s | outsbool(np.array(df1_el[errors[0]]))
-                df1_el.loc[outs_s, variables[0]]=np.nan       
-                #If cali-curve isn't empty, remove outliers in cali-curve data 
-                if (df1_el[variables[1]].size>0) & (any(~np.isnan(df1_el[variables[1]]))):
-                    outs_c=outsbool(np.array(df1_el[variables[1]]))
-                    outs_c=outs_c | outsbool(np.array(df1_el[errors[1]]))
-                    df1_el.loc[outs_c, variables[1]]=np.nan
-            #add to the dataframe list
-            df1_ls.append(df1_el)
-            
-        #subset the run dataframe for the given isotope 
-        df2_el=df2.loc[df2['isotope_gas']==iso]
-
-        #clear the axes
-        ax[0].cla()
-        ax[1].cla()
-        
-        
-        
-      
-        #Cycle through bracketing standards in the archive data
-        for i, brk in enumerate(pd.unique(df1['brkt_stnd'])):
-            
-            #Single-point calibration archive data
-            if any(~np.isnan(df1_ls[i][variables[0]])):
-                
-                #shaded area showing +/-2SD
-                ystdev2=df1_ls[i][variables[0]].std()*2
-                ymean=df1_ls[i][variables[0]].mean()
-                ax[0].axhspan(ymean-ystdev2, ymean+ystdev2, 
-                              alpha=0.2, color=cmap(i), 
-                              label='Archive calibrated by '+brk+r'$\mu \pm2\sigma$')
-                #Archive data with +/-1SE errorbars
-                scatter1_s = ax[0].errorbar(df1_ls[i][xvar].astype('datetime64[ns]'), 
-                                df1_ls[i][variables[0]], yerr=df1_ls[i][errors[0]],
-                                linestyle='None', marker='.', 
-                                color=cmap(i), ms=4, 
-                                label='Archive calibrated by '+brk+r'$ \pm1\sigma$')
-             
-            #Calibation curve archive data    
-            if any(~np.isnan(df1_ls[i][variables[1]])):    
-                
-                #shaded area showing +/-2SD
-                ystdev2=df1_ls[i][variables[1]].std()*2
-                ymean=df1_ls[i][variables[1]].mean()
-                ax[1].axhspan(ymean-ystdev2, ymean+ystdev2, 
-                              alpha=0.2, color=cmap(i), 
-                              label='Archive calibrated by '+brk+r'$\mu \pm2\sigma$')
-                #Archive data with +/-1SE errorbars
-                scatter1_c = ax[1].errorbar(df1_ls[i][xvar].astype('datetime64[ns]'), 
-                                df1_ls[i][variables[1]], yerr=df1_ls[i][errors[1]],
-                                linestyle='None', marker='.', 
-                                color=cmap(i), ms=4, 
-                                label='Archive calibrated by '+brk+r'$ \pm1\sigma$')
-            
-        #Single-point run data with +/-1SE errorbars       
-        scatter2_s = ax[0].errorbar(df2_el[xvar].astype('datetime64[ns]'), 
-                            df2_el[variables[0]], yerr=df2_el[errors[0]],
-                            linestyle='None', marker='s', color='black', ms=4, 
-                            label='This run'+r'$ \pm1\sigma$')
-
-        
-        if any(df2_el.columns == variables[1]):
-            #Calibration curve run data with +/-1SE errorbars
-            scatter2_c = ax[1].errorbar(df2_el[xvar].astype('datetime64[ns]'), 
-                            df2_el[variables[1]], yerr=df2_el[errors[1]],
-                            linestyle='None', marker='s', color='black', ms=4, 
-                            label='This run'+r'$ \pm1\sigma$')
-            
-        
-        
-        #draw expected values
-        if ~np.isnan(expected[iso]):
-            ax[0].axhline(expected[iso], color='black', label='Expected', ls='--')
-            ax[1].axhline(expected[iso], color='black', label='Expected', ls='--')
-        
-        #Legend    
-        handles,labels = ax[0].get_legend_handles_labels()
-        ax[0].legend(handles, labels)
-        handles,labels = ax[1].get_legend_handles_labels()
-        ax[1].legend(handles, labels)
-        
-        #Titles and tick marks
-        ax[0].title.set_text('Single-point')
-        ax[1].title.set_text('Calibration curve')
-        ax[0].xaxis.set_tick_params(rotation=45)
-        ax[1].xaxis.set_tick_params(rotation=45)
-        #Axes labels
-        ax[0].set_xlabel(xvar)
-        ax[1].set_xlabel(xvar)
-        ax[0].set_ylabel(iso)
-        #plt.show()
-        
-        fig.canvas.draw_idle()
-        
-  
-    
-    # Create the Tkinter window
-    window = tk.Tk()
-    
-    width= window.winfo_screenwidth()*0.9               
-    height= window.winfo_screenheight()*0.85               
-    window.geometry("%dx%d" % (width, height))
-    window.title(title)
-    
-    
-    
-    
-    button_frame = tk.Frame(window)
-    button_frame.pack(side=tk.TOP, padx=10, pady=10)
-    
-    
-    # Create the dropdown menu
-    dropdown_var = tk.StringVar(window)
-    dropdown_var.set("Choose the isotope")  # Set default value
-    dropdown = tk.OptionMenu(button_frame, dropdown_var, *iso_vars, 
-                             command=update_y_axis)
-    dropdown.pack(side=tk.LEFT)
-    
-    button_frame2 = tk.Frame(window)
-    button_frame2.pack(side=tk.BOTTOM)
-    
-    figure_frame = tk.Frame(window)
-    figure_frame.pack(fill=tk.BOTH,  side=tk.TOP)
-    
-    
-    # Create the FigureCanvasTkAgg object
-    canvas = FigureCanvasTkAgg(fig, master=figure_frame)
-    canvas.draw()
-    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, ipady=20)
-    
-    
-    Save_button = tk.Button(button_frame2, text="Save", 
-                              command=saveonefig)
-    SaveAll_button = tk.Button(button_frame2, text="Save all", 
-                              command=saveallfig)
-    Exit_button = tk.Button(button_frame2, text="Exit", 
-                              command=lambda: window.destroy())
-    
-    Save_button.pack(side=tk.LEFT)
-    SaveAll_button.pack(side=tk.LEFT)
-    Exit_button.pack(side=tk.LEFT)
-
-
-    #progress bar
-    progressbar = ttk.Progressbar(window, orient=tk.HORIZONTAL, length=400)
-    progressbar.pack(side=tk.BOTTOM)
-    
-    # Run the Tkinter event loop
-    window.mainloop()
-def repeditor(df, pa, title, table_df, id, repnames, repPA_all_df, outmod=1.5):
-    
-    """
-    Open a Tkinter GUI for interactive editing of data points in a DataFrame.
-
-    Parameters:
-    - df (pd.DataFrame): The main DataFrame containing data points.
-    - pa (pd.DataFrame): DataFrame with additional information for annotations.
-    - title (str): The title of the Tkinter window.
-    - table_df (pd.DataFrame): DataFrame to display in a table in the GUI.
-    - id (int): Identifier for the current instance.
-
-    Returns:
-    - pd.DataFrame: A modified DataFrame after user interaction.
-
-    This function opens a Tkinter window with an embedded Matplotlib plot, allowing
-    users to interactively select and edit data points. The user can choose an isotope
-    from a dropdown menu, click on points in the plot to mark them for removal or restoration,
-    and view additional information in tables.
-
-    The function utilizes global variables for efficiency and includes a nested function
-    for handling pick events on the plot. It provides functionality for updating the plot,
-    handling dropdown menu changes, and displaying tables with updated data.
-
-    The GUI consists of a scatter plot with different markers for removal, keeping, and
-    recommended outliers. Tables are displayed alongside the plot, showing data and annotations.
-
-    Note: The function relies on the Matplotlib, Pandas, and Tkinter libraries.
-
-    Example:
-    import pandas as pd
-    import numpy as np
-    import tkinter as tk
-    from tkinter import ttk
-    import matplotlib.pyplot as plt
-
-    # Assuming necessary variables are defined (e.g., repnames, repPA_all_df)
-    modified_df = repeditor(df, pa, "Interactive Editor", table_df, 1)
-    """
-    
-    global selected_ind, variable
-    xvar=np.arange(len(repnames))+1
-    df2=df.copy()
-    variable=df['isotope_gas'].values[0]
-    selected_ind={k: np.array([], dtype=int) for k in df['isotope_gas'].values}
-    
-    def on_pick(event):
-        global ind, selected_ind
-        ind = event.ind
-
-        newind=np.setdiff1d(ind, selected_ind[variable])
-        
-        #If the user has selected a new unselected point
-        if newind.size>0:
-            #Save the data index to the dictionary of isotopes
-            selected_ind[variable]=np.append(selected_ind[variable], newind)
-            df2.loc[variable, repnames[ind]]=np.nan    
-        #If the user has clicked on an already selected point    
-        else:
-            selected_ind[variable]=np.setdiff1d(selected_ind[variable], ind)
-            df2.loc[variable, repnames[ind]]=df.loc[variable, repnames[ind]]
-        #Re-calculate means, standard deviations, and quartiles    
-        iso_mean=np.nanmean(df2.loc[variable,repnames])
-        iso_sd=np.nanstd(df2.loc[variable,repnames])
-        q75, q25 = np.percentile(df2.loc[variable, repnames], [75 ,25])
-        
-        #Re-draw the figure
-        scatter2.set_data(xvar, df2.loc[variable, repnames])
-        mean_line.set_ydata([iso_mean, iso_mean])
-        sd_line_upper.set_ydata([iso_mean+iso_sd*2, iso_mean+iso_sd*2])
-        out_line_upper.set_ydata([q75+(q75-q25)*outmod, q75+(q75-q25)*outmod])
-        sd_line_lower.set_ydata([iso_mean-iso_sd*2, iso_mean-iso_sd*2])
-        out_line_lower.set_ydata([q25-(q75-q25)*outmod, q25-(q75-q25)*outmod])
-        fig.canvas.draw_idle()
-    
-    
-    # Create the initial plot without showing the figure
-    fig, ax = plt.subplots()
-    scatter1, = ax.plot([], [], linestyle='None', marker='o', color='red', picker=5, mec='r')
-    scatter2, = ax.plot([], [], linestyle='None', marker='o', color='blue', mec='b')
-    scatter_outs, = ax.plot([], [], linestyle='None', marker='o', 
-                            mfc='none', mec='r', mew=1)
-    mean_line=ax.axhline(y=0, ls='-', color='black')
-    sd_line_upper=ax.axhline(y=0, ls='--', color='black')
-    out_line_upper=ax.axhline(y=0, ls=':', color='black')
-    sd_line_lower=ax.axhline(y=0, ls='--', color='black')
-    out_line_lower=ax.axhline(y=0, ls=':', color='black')
-    PA_annotate_ls=[ax.text(0, 0, [], fontsize=12, ha='right', va='bottom') 
-                    for rep in repnames]
+def deconstruct_isotope_gas(string, output='all'):
     
-    ax.set_xlabel('Replicate number')
-    ax.set_ylabel(variable)
-    ax.legend(['Remove', 'Keep', 'Recommend (outlier)', 'Mean', '2$\sigma$', 'outlier threshold'])
+    str_series=pd.Series(string)
     
-    # Register the pick event
-    fig.canvas.mpl_connect('pick_event', on_pick)
+    mass=str_series.str.extract(r'(\d+)').values.flatten()
+    element=str_series.str.extract(r'([A-Z][a-z]*)').values.flatten()
     
-    plt.close(fig)  # Close the figure to prevent it from being displayed
+    #join the mass and element arrays to make isotope
+    isotope=mass+element
     
-    
-    
-    # Define the update function for the dropdown (changing isotopes)
-    def update_y_axis(*args):
-        global variable
-        variable = dropdown_var.get()
-        
-        #Show the outliers recommended for removal
-        outs=outsbool(df.loc[variable, repnames].astype(float), mod=outmod)
-        
-        #calculate the means, sd and quartiles
-        iso_mean=np.nanmean(df2.loc[variable,repnames])
-        iso_sd=np.nanstd(df2.loc[variable,repnames])
-        q75, q25 = np.percentile(df2.loc[variable, repnames], [75 ,25])
-        
-        #Re-draw the figure
-        scatter1.set_data(xvar, df.loc[variable, repnames])
-        scatter2.set_data(xvar, df2.loc[variable, repnames])
-        scatter_outs.set_data(xvar[outs], df2.loc[variable, repnames[outs]])
-        mean_line.set_ydata([iso_mean, iso_mean])
-        sd_line_upper.set_ydata([iso_mean+iso_sd*2, iso_mean+iso_sd*2])
-        out_line_upper.set_ydata([q75+(q75-q25)*outmod, q75+(q75-q25)*outmod])
-        sd_line_lower.set_ydata([iso_mean-iso_sd*2, iso_mean-iso_sd*2])
-        out_line_lower.set_ydata([q25-(q75-q25)*outmod, q25-(q75-q25)*outmod])
-        
-        for i, txt in enumerate(PA_annotate_ls):
-            txt.set_position((xvar[i], df.loc[variable, repnames[i]].astype(float)))
-            PA_text=pa.loc[variable, repnames[i]]
-            txt.set_text(PA_text)
-        
-        ax.set_ylabel(variable)
-        ax.relim()
-        ax.autoscale_view()
-        fig.canvas.draw_idle()
-        
-        new_PA_run_df=repPA_all_df[['sample_name', variable]].copy()
-        new_PA_run_df.insert(0, 'Index', np.arange(len(repPA_all_df)))
-        
-        #Change the 2nd table contents
-        for iid in list(PA_run_table.get_children()):
-            PA_run_table.delete(iid)
-        
-        PA_run_table.heading(col, text=col)
-        
-        for index, row in new_PA_run_df.iterrows():
-            if index==id:
-                PA_run_table.insert(parent='', index='end', 
-                                    iid=index, values=list(row), tags='sample') 
-            else:
-                PA_run_table.insert(parent='', index='end', iid=index, values=list(row))
-        PA_run_table.tag_configure('sample', background='yellow')
-        
-        
-        
-    
-    # Create the Tkinter window
-    window = tk.Tk()
-    window.title(title)
-    
-    #Keep the window at the front of other apps.
-    window.lift()
-    window.attributes("-topmost", True)
-    
-    plot_frame = ttk.Frame(window)
-    plot_frame.grid(row=0, column=0, sticky='nsew', rowspan=2)
-    
-    table_frame = ttk.Frame(window)
-    table_frame.grid(row=0, column=1, sticky='new')
-    
-    table_2_frame = ttk.Frame(window)
-    table_2_frame.grid(row=1, column=1, sticky='sew')    
-    
-    
-        # Create a treeview widget for the table
-    outlier_table = ttk.Treeview(table_frame, columns=table_df.columns, show='headings')
-    
-        # Define columns based on DataFrame columns
-    outlier_table['columns'] = list(table_df.columns)
-
-    # Set column headings
-    for col in table_df.columns:
-        outlier_table.heading(col, text=col)
-    
-    # Insert data from DataFrame
-    for index, row in table_df.iterrows():
-        outlier_table.insert(parent='', index='end', iid=index, values=list(row))
-
-    # Pack the table
-    outlier_table.pack(expand=tk.YES, fill=tk.BOTH)
-    
-    vsb = ttk.Scrollbar(table_frame, orient="vertical", command=outlier_table.yview)
-    vsb.pack(side='right', fill='y')
-    outlier_table.configure(yscrollcommand=vsb.set)
-    
-    #Start table
-    
-    PA_template_df=pd.DataFrame({'Index': np.arange(len(repPA_all_df)), 
-                                 'sample_name': repPA_all_df['sample_name'].values, 
-                                    'Isotope': np.array(['']*len(repPA_all_df))})
-
-    
-        # Create a treeview widget for the table
-    PA_run_table = ttk.Treeview(table_2_frame, columns=PA_template_df.columns, show='headings')
-    
-        # Define columns based on DataFrame columns
-    PA_run_table['columns'] = list(PA_template_df.columns)
-
-    # Set column headings
-    for col in PA_template_df.columns:
-        PA_run_table.heading(col, text=col)
-    
-    # Insert data from DataFrame
-    for index, row in PA_template_df.iterrows():
-        if index==id:
-            PA_run_table.insert(parent='', index='end', 
-                                iid=index, values=list(row), tags='sample') 
-        else:
-            PA_run_table.insert(parent='', index='end', iid=index, values=list(row))
-    PA_run_table.tag_configure('sample', background='yellow')
-
-    # Pack the table
-    PA_run_table.pack(expand=tk.YES, fill=tk.BOTH)
-    
-    vsb = ttk.Scrollbar(table_2_frame, orient="vertical", command=PA_run_table.yview)
-    vsb.pack(side='right', fill='y')
-    PA_run_table.configure(yscrollcommand=vsb.set)
-    
-
-    # Configure grid weights to make the frames resizable
-    window.grid_rowconfigure(0, weight=1)
-    window.grid_rowconfigure(1, weight=1)
-    window.grid_columnconfigure(0, weight=1)
-    window.grid_columnconfigure(1, weight=1)
-    
-
-    
-    # Create the dropdown menu
-    dropdown_var = tk.StringVar(plot_frame)
-    dropdown_var.set('Choose an isotope')  
-    dropdown = tk.OptionMenu(plot_frame, dropdown_var, *df['isotope_gas'].values, 
-                             command=update_y_axis)
-    dropdown.pack(padx=10, pady=10)
-    
-    
-    submit_button = tk.Button(plot_frame, text="Submit", 
-                              command=lambda: window.destroy())
-    submit_button.pack( side = tk.BOTTOM)
-
-
-    # Create the FigureCanvasTkAgg object
-    canvas = FigureCanvasTkAgg(fig, master=plot_frame)
-    canvas.draw()
-    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-    
-    # Run the Tkinter event loop
-    window.mainloop()
-    
-    
-    return df2
-def ratioel_rep_removal(df, repnames, ratioels, isotopes, Gasmodes):
-    
-    """
-    Remove data points corresponding to certain ratio elements (ratioels) from a DataFrame.
-
-    Parameters:
-    - df (pd.DataFrame): The DataFrame containing data points.
-
-    Returns:
-    - pd.DataFrame: A modified DataFrame after removing specified ratio elements.
-
-    This function identifies and removes data points in the DataFrame where the isotope_gas
-    corresponds to specific ratio elements defined in the global variable ratioels. The removal
-    is based on the presence of NaN values in the columns specified by the global variable repnames.
-    The function iterates through the identified points and updates the DataFrame accordingly.
-
-    Parameters such as repnames, ratioels, isotopes, Gasmodes, and rep_cps_long_df are assumed
-    to be defined globally.
-
-    Example:
-    import pandas as pd
-    import numpy as np
-
-    # Assuming necessary variables are defined (e.g., repnames, ratioels, isotopes, Gasmodes)
-    modified_df = ratioel_rep_removal(df)
-    """
-    
-    out_idx=np.any(np.isnan(df[repnames]), axis=1)
-    out_iso=df.loc[out_idx, 'isotope_gas']
-    if np.any(np.isin(out_iso, list(ratioels.values()))):
-        ratioel_out_idx=out_iso.loc[np.isin(out_iso, list(ratioels.values()))].index
-        for i in ratioel_out_idx:
-            out_ratio_el=df.loc[i, 'isotope_gas']
-            out_gasmode=Gasmodes[i%len(isotopes)]
-            isos_in_gasmode=isotopes[Gasmodes==out_gasmode]
-            idx=(np.isin(df['isotope_gas'], isos_in_gasmode)
-                    &(df['run_order']==df.loc[i, 'run_order']))
-            
-            
-            
-            out_array=np.array([list(pd.isna(df.loc[i, repnames]))]*len(isos_in_gasmode))
-            
-            df.loc[idx, repnames]= np.where(out_array, np.nan, df.loc[idx, repnames])
-    
-    return df
-def display_dataframe_with_option(df):
-
-
-    
-    """
-    Display a Tkinter window with a Treeview widget to visualize a DataFrame and prompt a user option.
-
-    Parameters:
-    - df (pd.DataFrame): The DataFrame to be displayed.
-
-    Returns:
-    - bool or None: The result of the user's choice ('Yes', 'No') or None if the window is closed.
-
-    This function creates a Tkinter window to visualize the contents of a DataFrame using a Treeview widget.
-    The user is prompted with a question and provided with 'Yes' and 'No' buttons to make a choice.
-    The function returns the user's choice once a button is clicked, or None if the window is closed.
-
-    Example:
-    import pandas as pd
+    #extract only the text after the last underscore in the series of strings
+    gas_mode=np.array([])
+    for s in str_series:
+        gas_mode=np.append(gas_mode, s.split('_')[-1])
 
-    # Assuming a DataFrame 'my_dataframe' is defined
-    user_choice = display_dataframe_with_option(my_dataframe)
-    if user_choice is not None:
-        print(f"User chose {'Yes' if user_choice else 'No'}.")
-
-    """
-    
-    df.reset_index(inplace=True)
-    result = None  # Initialize result variable
-    
-    def yes_clicked():
-        nonlocal result  # Use nonlocal to modify the outer variable
-        result = True
-        root.destroy()
-    
-    def no_clicked():
-        nonlocal result  # Use nonlocal to modify the outer variable
-        result = False
-        root.destroy()
-
-    # Create the main window
-    root = tk.Tk()
-    root.title("DataFrame Viewer")
-    
-    #Keep the window at the front of other apps.
-    root.lift()
-    root.attributes("-topmost", True)
-
-    # Create a Treeview widget
-    tree = ttk.Treeview(root)
-
-    # Define columns based on DataFrame columns
-    tree['columns'] = list(df.columns)
-
-    # Set column headings
-    for col in df.columns:
-        #Find the width of the columns so that they can be adjusted to fit
-        max_len = max(df[col].astype(str).apply(len).max(), len(col))
-        tree.column(col, width=max_len * 10)  # Adjust the factor (10) as needed for proper sizing
-        tree.heading(col, text=col, command=lambda c=col: sortby(tree, c, 0))
-
-    # Create vertical scrollbar
-    vsb = ttk.Scrollbar(root, orient="vertical", command=tree.yview)
-    vsb.pack(side='right', fill='y')
-    tree.configure(yscrollcommand=vsb.set)
-
-    # Create horizontal scrollbar
-    hsb = ttk.Scrollbar(root, orient="horizontal", command=tree.xview)
-    hsb.pack(side='bottom', fill='x')
-    tree.configure(xscrollcommand=hsb.set)
-
-    # Insert data from DataFrame
-    for index, row in df.iterrows():
-        tree.insert(parent='', index='end', iid=index, text=index, values=list(row))
-
-    # Pack the Treeview widget
-    tree.pack()
-
-    # Create label
-    label = ttk.Label(root, text="Automatically remove P/A outliers?")
-    label.pack(pady=5)
-
-    # Create a frame to contain the buttons
-    button_frame = ttk.Frame(root)
-    button_frame.pack(pady=5)
+    if output=='all':
+        return mass, element, gas_mode
+    elif output=='mass':
+        return mass
+    elif output=='element':
+        return element
+    elif output=='gas_mode':
+        return gas_mode
+    else:
+        raise ValueError('Invalid output type. Please select from: all, mass, element, gas_mode.')
     
-    # Create 'Yes' and 'No' buttons
-    yes_button = ttk.Button(button_frame, text='Yes', command=yes_clicked)
-    yes_button.pack(side='left', padx=10)
-    no_button = ttk.Button(button_frame, text='No', command=no_clicked)
-    no_button.pack(side='left', padx=10)
-
-    # Start the tkinter main loop
-    root.mainloop()
-    
-    return result  # Return the result after the window is destroyed
-def iso_to_el(string):
-    element=string.split('_')[0].strip('1234567890')
-    return element
-def stnd_vals_df(df, stnd_names, isotopes):
-    new_df=pd.DataFrame()
-    for iso in isotopes:
-        vals=np.array(df.loc[iso_to_el(iso), stnd_names])
-        vals_df=pd.DataFrame(dict(zip(stnd_names, vals)), index=[iso])
-        units=df.loc[iso_to_el(iso), 'Units']
-        vals_df.insert(0, 'Units', units)
-        new_df=pd.concat([new_df, vals_df], axis=0)
-    return new_df
-
 
 def unarchive_replicates(rep_list):
     pattern=r'(\d*\.\d+|[PAU])'
@@ -1868,159 +132,373 @@ def unarchive_replicates(rep_list):
     rep_df=rep_df.droplevel(0, axis=1)
     rep_df.rename(columns={i: i+1 for i in rep_df.columns}, inplace=True)
     return rep_df
+
+
+def pivot_isotopes(df, var, index=['run_order', 'sample_name']):
+    df_piv=df.pivot_table(index=index, columns='isotope_gas', values=var, sort=False)
+    df_piv.reset_index(inplace=True)
+    return df_piv
     
-    
-    
+def make_empty_batch():
+    default_columns=['run_name', 'run_order', 'time','sample_name', 'total_reps',
+                     'isotope_gas', 'cps_mean', 'cps_std', 
+                     'rep_list', 'sample_type', 'brkt_stnd', 'cali_curve', 'ratio_iso']     
 
-def setup_progress_bar(text=''):
-    
-    #set up the progressbar
-    root=tk.Tk()
-    progressbar = ttk.Progressbar(root, orient=tk.HORIZONTAL, length=400)
-    root.title('Progress')
 
-    #Keep the window at the front of other apps.
-    root.lift()
-    root.attributes("-topmost", True)
 
-    w = 300 # width for the Tk root
-    h = 100 # height for the Tk root
-
-    # get screen width and height
-    ws = root.winfo_screenwidth() # width of the screen
-    hs = root.winfo_screenheight() # height of the screen
-
-    # calculate x and y coordinates for the Tk root window
-    x = (ws/2) - (w/2)
-    y = (hs/2) - (h/2)
-
-    # set the dimensions of the screen 
-    # and where it is placed
-    root.geometry('%dx%d+%d+%d' % (w, h, x, y))
-
-    l = tk.Label(root, text = text)
-    l.pack(side=tk.TOP)
-    progressbar.pack(side=tk.BOTTOM)
-    progressbar['value']=0  
-    progressbar.update()
-    return root, progressbar
-
-cwd=Path(os.getcwd())
-archive_path=cwd.parent.parent/'Agilent_EDA'/'data'/'bigdf_240226.csv'
-archive_df=pd.read_csv(archive_path, index_col=0)
-run_name=pd.unique(archive_df['run_name'])
-df=archive_df.loc[archive_df['run_name']==run_name[-1]].copy()
-
-df.loc[df['type'].str.contains('Cali_STGFrm'), 'type']='Bracket & Cali_STGFrm'
-
-def archive_to_batch(df, run_name=None, stnd_df=None):
+def archive_csv_to_batch(df, run_name=None, stnd_df=None):
     if run_name is None:
         run_name=pd.unique(df['run_name'])
         if len(run_name)>1:
             raise ValueError('Multiple run names detected. Please specify a run name.')
         
     df=df.loc[df['run_name']==run_name].copy()
-    
 
+    df['time']=pd.to_datetime(df['time'])
+    
     #get the isotopes, ratio isotopes, gas modes, blank order, bracket order
     isotopes=pd.unique(df['isotope_gas'])
     ratio_iso=pd.unique(df['ratio_iso'])
     gas_modes=pd.unique(df['gas_mode'])
-    blk_order=pd.unique(df.loc[df['type'].str.contains('Blank'), 'run_order'])
-    brkt_order=pd.unique(df.loc[df['type'].str.contains('Bracket'), 'run_order'])
-    
-    #define the calibration mode
-    if ~np.all(pd.isna(df['ratio_iso'])) & ~np.all(pd.isna(df['cali_curve'])):
-        cali_mode='Ratio calibration curve'
-    elif ~np.all(pd.isna(df['ratio_iso'])) & np.all(pd.isna(df['cali_curve'])):
-        cali_mode='Ratio single-point'
-    elif np.all(pd.isna(df['ratio_iso'])) & ~np.all(pd.isna(df['cali_curve'])):
-        cali_mode='Conc calibration curve'
-    else:
-        cali_mode=None
+    blk_order=pd.unique(df.loc[df['sample_type'].str.contains('Blank'), 'run_order'])
+    brkt_order=pd.unique(df.loc[df['sample_type'].str.contains('Bracket'), 'run_order'])
+    cali_mode=pd.unique(df['cali_mode'])[0]
+
+    timings=df[['run_order', 'time', 'session_time']].groupby('run_order').agg('first').reset_index()
     
     #define the number of replicates
-    rep_num=pd.unique(df['total_reps'])
+    rep_num=pd.unique(df['total_reps'])[0]
     
+    #NEEDED???
     #define the brkt stnd name
     brkt_stnd=pd.unique(df['brkt_stnd'])[0]
     
     #define the order of the calibration stnds as a dict
     cali_order={}
-    cali_type_names=pd.unique(df.loc[df['type'].str.contains('Cali'), 'type'])
+    cali_type_names=pd.unique(df.loc[df['sample_type'].str.contains('Cali'), 'sample_type'])
     for type_name in cali_type_names:
         type_name_arr=np.array(type_name.split())
         idx=np.char.find(type_name_arr, 'Cali')==0
-        cali_name=type_name_arr[idx].strip('Cali_')
-        cali_name_order=pd.unique(df.loc[df['type'].str.contains(cali_name), 'run_order'])
+        cali_name=type_name_arr[idx][0].strip('Cali_')
+        cali_name_order=pd.unique(df.loc[df['sample_type'].str.contains(cali_name), 'run_order'])
         cali_order[cali_name]=cali_name_order
+    
+    
     
     
     #define the replicate df
     
     rep_df=unarchive_replicates(df['rep_list'])
-    
-    rep_df=pd.concat(df['run_name', 'run_order', 'time', 'sample_name', 
-                        'total_reps', 'session_time', 'vial', 'isotope_gas', 
-                        'mass', 'element', 'gas_mode'], rep_df, axis=1)
-    
+    rep_PA_df=unarchive_replicates(df['rep_pa_list'])
+    rep_df=pd.concat([df[['run_order', 'isotope_gas']], rep_df], axis=1)
+    rep_PA_df=pd.concat([df[['run_order', 'isotope_gas']], rep_PA_df], axis=1)
     rep_df.reset_index(drop=True, inplace=True)
-    rep_long_df=rep_df.melt(var_name='replicate', value_name='cps')
+    rep_PA_df.reset_index(drop=True, inplace=True)
+    rep_long_PA_df=rep_PA_df.melt(var_name='replicate', value_name='det_mode', id_vars=['run_order', 'isotope_gas'])
+    rep_long_df=rep_df.melt(var_name='replicate', value_name='cps', id_vars=['run_order', 'isotope_gas'])
+    rep_df=pd.concat([rep_long_df, rep_long_PA_df['det_mode']], axis=1)
+    rep_df['isotope_gas']=pd.Categorical(rep_df['isotope_gas'], categories=pd.unique(rep_df['isotope_gas']))
+    rep_df.sort_values(by=['run_order','isotope_gas', 'replicate'], inplace=True)
+    
+    
+    cps_mean=pivot_isotopes(df, 'cps_mean')
+    cps_std=pivot_isotopes(df, 'cps_std')
+    ratio_cps=pivot_isotopes(df, 'cps_ratio')
+    ratio_cps_se=pivot_isotopes(df, 'cps_ratio_se')
+    brkted=pivot_isotopes(df, 'brkted')
+    brkted_se=pivot_isotopes(df, 'brkted_se')
+    
+    if cali_mode == 'ratio curve':
+        cali_curve={'ratio single':pivot_isotopes(df, 'cali_single'), 
+                    'ratio curve':pivot_isotopes(df, 'cali_curve')}
+    elif cali_mode in ['ratio single', 'conc single']:
+        cali_curve={cali_mode:pivot_isotopes(df, 'cali_single')}
+    else:
+        cali_curve={cali_mode:pivot_isotopes(df, 'cali_curve')}
         
     
-    batched=Batch(df, isotopes, ratio_iso, gas_modes,  rep_long_df, 
+    if 'int_time' in  df.columns:
+        int_dict=dict(zip(df['isotope_gas'], df['int_time']))
+    elif 'cpc' in df.columns:
+        int_group=df.groupby('isotope_gas', sort=False)[['cpc', 'cps_mean']].max()
+        int_group['int_time']=int_group['cpc']/int_group['cps_mean']
+        int_dict=dict(zip(int_group.index, int_group['int_time'].round(2)))
+    else:
+        int_dict=dict(zip(df['isotope_gas'], np.nan))
+    
+    #make analyte df
+    mass, element, gas_mode=deconstruct_isotope_gas(isotopes)
+    analytes=pd.DataFrame({'isotope_gas': isotopes, 
+                             'mass': mass, 
+                             'element': element, 
+                             'gas_mode': gas_mode})
+    analytes['int_time']=analytes['isotope_gas'].map(int_dict)
+    units_dict=dict(zip(df['isotope_gas'], df['units']))
+    analytes['units']=analytes['isotope_gas'].map(units_dict)
+    
+    
+    if 'ratio' in cali_mode:
+        ratio_iso_dict=dict(zip(df['isotope_gas'], df['ratio_iso']))
+        analytes['ratio_iso']=analytes['isotope_gas'].map(ratio_iso_dict)
+    
+    
+    default_stnds=get_default_stndvals()
+    cali_stnd_df=make_stndvals_df(default_stnds, list(cali_order.keys()), isotopes)
+    
+    batched=Batch(run_name, isotopes, ratio_iso, gas_modes,  rep_long_df, 
                   blk_order, brkt_order, brkt_stnd, cali_mode, 
                   rep_num, cali_order, stnd_df)   
         
     
     
+def import_batch(path=None, ui=False, stnd_df=None):
+    
+    if ui or path is None:
+        from Pygilent.uitools import select_folder
+        
+        path=select_folder()
+        
+    #try to convert path to Path object 
+    try:
+        path=Path(path)
+    except TypeError:
+        raise TypeError('Invalid path. Please provide a valid path.')
+
+    
+    
+    #search for batch file
+    
+    if not os.path.isfile(path/'BatchLog.csv'):
+        raise FileNotFoundError('No batch log found in the directory.')
+
+    #load the batch log
+    batch_df=pd.read_csv(path/'BatchLog.csv')
+    batch_df.dropna(axis=0, how='all', inplace=True)
+    
+    #POTENTIALLY NEED TO SPECIFY TIME FORMAT
+    batch_df.rename(columns={'Acq. Date-Time': 'time'}, inplace=True)
+    
+    #gets time string and converts to datetime
+    
+    if np.any(batch_df['time'].str.contains('/')):
+        
+        if np.any(batch_df['time'].str.contains('M')):
+        
+            batch_df['time']=pd.to_datetime(batch_df['time'], 
+                                        format="%m/%d/%Y %I:%M:%S %p")    
+            
+        else:
+            batch_df['time']=pd.to_datetime(batch_df['time'], 
+                                        format="%d/%m/%Y %H:%M") 
+    else:
+        batch_df['time']=pd.to_datetime(batch_df['time'], format="%d-%b-%y %I:%M:%S %p") 
+        
+    
+    
+    batch_df=batch_df.loc[(batch_df['Acquisition Result']=='Pass') & 
+                          (batch_df["Sample Type"].str.contains("Tune")==False) &
+                          (~(batch_df["Vial#"]=="-"))]
+
+    batch_df.reset_index(drop=True, inplace=True)
+    
+    #Get a list of the sample names, make them into directories and put them into the main df
+    subfolder_list=[path/Path(x).name for x in batch_df["File Name"]]
+    batch_df['directory']=subfolder_list
+
+    #Setup run info table
+    smpl_info=pd.DataFrame(np.repeat(path.name, len(batch_df)), columns=['run_name'])
+    smpl_info[['time', 'sample_name', 'vial']]=batch_df[['time', 'Sample Name', 'Vial#']]
+
+    #give error if no samples found
+    if len(batch_df)==0:
+        raise ValueError('No valid samples found in batch log.')
+    
+    #Get the total elapsed time since first sample
+    smpl_info['session_time']=batch_df['time']-batch_df.loc[0,'time']
+    #Convert to seconds
+    smpl_info['session_time']=smpl_info['session_time'].dt.total_seconds()
+    
+    smpl_info['run_order']=np.arange(0, len(smpl_info))
+    
+    #This speeds up the processing to find the gas modes and number of repeats
+    from concurrent.futures import ThreadPoolExecutor
+    import csv
+    def extract_gas_mode(file_path):
+        with open(file_path, newline='') as f:
+            reader = csv.reader(f)
+            row1 = next(reader)[0].rsplit('/')[-1].strip('\n ')
+        return row1
+    
+    #Start iterating through samples
+    for s_num, subfolder in enumerate(subfolder_list):   
+
+        #Get list of subfolders containing replicates and gas modes. Exclude quickscan
+        csvlist = [s for s in os.listdir(subfolder) if ".csv" in s and "quickscan" 
+                not in s and subfolder.name[0:-2] in s]
+        file_paths = [subfolder/c for c in csvlist]
+        
+        #Find out how many repeats and gas modes there are by reading first sample
+        testmode=[]
+        with ThreadPoolExecutor() as executor:
+            testmode = list(executor.map(extract_gas_mode, file_paths))
         
 
+        #Get the number of repeats and gases by counting occurrences of gas modes
+        total_reps=testmode.count(list(set(testmode))[0])
+        numgases=len(set(testmode))
+        compile_df=pd.DataFrame()
+        #iterate through replicates  
+        for r in range(total_reps):
+            #Empty dataframe for each repeat
+            allgas_df=pd.DataFrame()
+            #iterate through gas modes
+            for g in range(numgases):
 
+                fileloc=subfolder/csvlist[r+g*total_reps] #directory of file
+                #Read the data
+                gas_df=pd.read_csv(fileloc, skiprows=list(range(0, 7)), header=0) 
+                #remove print info                               
+                gas_df=gas_df.drop(gas_df.tail(1).index) 
+                #get the current gas mode
+                gasmodetxt=testmode[r+g*total_reps].strip(' ') 
+                
+                #Get the element and mass info, which is printed differently in csv
+                #depending on whether using single or double quads.
+                if 'Q1' in gas_df.columns and 'Q2' in gas_df.columns:
+                    
+                    gas_df["isotope_gas"]=(gas_df["Element"]
+                                            +np.array(gas_df['Q1'], 
+                                                    dtype=int).astype('str')
+                                            +"_"+np.array(gas_df['Q2'], 
+                                                        dtype=int).astype('str')
+                                            +"_"+gasmodetxt)
+                    gas_df["mass"]=np.array(gas_df['Q1'], dtype=int)   
+                else:                    
+                    #Make df of current gas mode
+                    #Combine mass and element to make isotope column
+                    gas_df["isotope_gas"]=(gas_df["Element"]
+                                        +gas_df.iloc[:, 0]+"_"+gasmodetxt) 
+                    gas_df["mass"]=np.array(gas_df['Mass'], dtype=int)  
+        
+                        
+                gas_df["gas_mode"]=gasmodetxt
+                            
+                #PA column often wrongly named, so need to rename it.
+                #first find the column next to CPS            
+                idx=np.where(gas_df.columns == 'CPS')[0]+1
+                gas_df['det_mode']=gas_df.iloc[:, idx]
+                #Concat all gas modes of this repeat
+                allgas_df=pd.concat([allgas_df, gas_df], ignore_index=True)
+                
+                
+            single_rep_df=pd.DataFrame(np.array([list(smpl_info.loc[s_num])]*len(allgas_df)), 
+                                       columns=smpl_info.columns)
+            
+            single_rep_df['run_order']=s_num
+            single_rep_df['replicate']=r+1
+            
+            single_rep_df[['element', 'isotope_gas', 'mass', 'gas_mode', 'total_reps', 'det_mode', 'int_time', 
+                           'cps']]=allgas_df[['Element', 'isotope_gas', 'mass', 'gas_mode', 'n', 'det_mode', 'Time(Sec)', 
+                           'CPS']]
+
+            single_rep_df['total_reps']=total_reps
+            compile_df=pd.concat([compile_df, single_rep_df], axis=0)
+    
+    run_name=path.name
+    
+    compile_df['isotope_gas']=pd.Categorical(compile_df['isotope_gas'], categories=pd.unique(compile_df['isotope_gas']))
+    rep_df=compile_df[['run_order', 'isotope_gas', 'replicate',  'cps', 'det_mode']].copy()
+    rep_df.sort_values(by=['run_order','isotope_gas', 'replicate'], inplace=True)
+    
+    analytes=single_rep_df[['isotope_gas', 'mass', 'element', 'mass', 'gas_mode', 'int_time']]
+    
+    batch=Batch(run_name, smpl_info, total_reps, analytes, rep_df)
+
+    return batch
+    
+
+    
+    
+            
 
 ## Classes
 
+
 class Batch:   
-    def __init__(self, df, isotopes, ratio_iso, gas_modes,  rep_long_df,
-                 blk_order, brkt_order, brkt_stnd, cali_mode, 
-                 rep_num, cali_order, stnd_df):
-        self.df = df
-        self.isotopes = isotopes
-        self.ratio_iso = ratio_iso
-        self.gas_modes = gas_modes
-        self.rep_num = rep_num
-        self.rep_long_df = rep_long_df
-        self.blk_order = blk_order 
-        self.brkt_order = brkt_order
-        self.cali_mode = cali_mode
-        self.cali_order = cali_order
-        self.stnd_df = stnd_df
-        self.brkt_stnd = brkt_stnd
+    
+    def __init__(self, run_name=None, smpl_info=None, total_reps=None, analytes=None, rep_df=None, 
+                 cps_mean=None, cps_sd=None, cps_ratio=None, cps_ratio_se=None, 
+                 calibrated=None, calibrated_se=None, cov=None, 
+                 cali_stnd_df=None, curve_mdl=None, blk_order=[], brkt_order=[], 
+                 brkt_stnd=None, cali_mode=None, ratio_iso=None, 
+                 cali_order={}, stnd_df=None):
+        self.run_name=run_name
+        self.smpl_info=smpl_info
+        self.total_reps=total_reps
+        self.analytes=analytes
+        self.rep_df=rep_df
+        self.cps_mean=cps_mean
+        self.cps_sd=cps_sd
+        self.cps_ratio=cps_ratio
+        self.cps_ratio_se=cps_ratio_se
+        self.calibrated=calibrated
+        self.calibrated_se=calibrated_se
+        self.cov=cov
+        self.cali_stnd_df=cali_stnd_df
+        self.curve_mdl=curve_mdl
+        self.blk_order=blk_order
+        self.brkt_order=brkt_order
+        self.brkt_stnd=brkt_stnd
+        self.cali_mode=cali_mode
+        self.ratio_iso=ratio_iso
+        self.cali_order=cali_order
+        self.stnd_df=stnd_df
+    
+    def set_cali_mode(self, mode):
         
+        modes=['ratio curve', 'ratio single', 'conc curve', 'conc single']
+        Ca_check=['ca check', 'ca_check','check', 'conc check']
+        if mode.lower() in Ca_check:
+            warnings.warn('Conc check mode selected. Calibration mode will be set to conc single.')
+            self.cali_mode = 'conc single'
+        if mode.lower() not in modes:
+            raise ValueError('Invalid calibration mode. Please select from the following: ratio curve, ratio single, conc curve, conc single.')
+        
+        self.cali_mode = mode
+        
+    def initialize(self):
+        #check if the batch has correct attributes to proceed
+        if type(self.cps_mean) is not pd.core.frame.DataFrame and type(self.rep_cps) is not pd.core.frame.DataFrame:
+            raise RuntimeError('No raw data provided. Please provide raw data.')
+        elif type(self.rep_cps) is not pd.core.frame.DataFrame:
+            warnings.warn('No replicate data provided. Standard errors cannot be calculated.')
+        if type(self.timings) is not pd.core.frame.DataFrame:
+            raise RuntimeError('No timing data provided. Please provide timing data.')
+        if self.cali_mode not in ['ratio curve', 'ratio single', 'conc curve', 'conc single']:
+            raise RuntimeError('Invalid calibration mode provided. Please provide a calibration mode using set_cali_mode method.')
+        
+        if len(self.blk_order)==0:
+            warnings.warn('No blank order provided. Blanks will not be removed.')
+        
+        if len(self.brkt_order)==0:
+            if 'single' in self.cali_mode:
+                raise RuntimeError('No bracket order provided. Brackets are required for single-point calibration.')
+            else:
+                warnings.warn('No bracket order provided. Sample will not be drift-corrected.')
+
+        if len(self.cali_order)==0:
+            raise RuntimeError('No calibration standards provided.')
+        elif len(self.cali_order)==1 and 'curve' in self.cali_mode:
+            raise RuntimeError('Only one calibration standard provided. Calibration curve cannot be fit.')
     
     
+    def process(self):
+        #fully process the batch using the calibration mode specified
+        pass
     
     
-        
-    def remove_outliers(self):
-        self.df = ratioel_rep_removal(self.df, self.repnames, self.ratioels, 
-                                      self.isotopes, self.Gasmodes)
-        
-    def display_dataframe(self):
-        return display_dataframe_with_option(self.df)
+
     
-    def interactive_editor(self, title, id):
-        self.df = repeditor(self.df, self.rep_PA_all_df, title, self.rep_PA_all_df, id, 
-                            self.repnames, self.rep_PA_all_df, outmod=self.outmod)
-        
-    def calibration_plot(self, df1, df2, title, figpath, expected, xvar='run_order'):
-        calibration_plot(df1, df2, title, self.isotopes, self.repnames, self.repnames, 
-                         self.repnames, expected, xvar, figpath)
-        
-    def interactive_calibration_plot(self, df1, df2, title, figpath, expected, xvar='run_order'):
-        interactive_calibration_plot(df1, df2, title, self.isotopes, self.repnames, self.repnames, 
-                                     self.repnames, expected, xvar, figpath)
-        
     def save_to_csv(self, path):
         self.df.to_csv(path, index=False)
         

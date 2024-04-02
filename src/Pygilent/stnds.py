@@ -2,7 +2,6 @@
 from  importlib import resources
 import pandas as pd
 import numpy as np
-from Pygilent.Pygilent import iso_to_el
 
 def get_default_stndvals():
     """Get path to example "Flatland" [1]_ text file.
@@ -22,11 +21,12 @@ def get_default_stndvals():
 
 
 def make_stndvals_df(df, stnd_names, isotopes):
+    from Pygilent.pygilent import isotope_gas_to_el
     new_df=pd.DataFrame()
     for iso in isotopes:
         vals=np.array(df.loc[iso_to_el(iso), stnd_names])
         vals_df=pd.DataFrame(dict(zip(stnd_names, vals)), index=[iso])
-        units=df.loc[iso_to_el(iso), 'Units']
+        units=df.loc[isotope_gas_to_el(iso), 'Units']
         vals_df.insert(0, 'Units', units)
         new_df=pd.concat([new_df, vals_df], axis=0)
     return new_df
