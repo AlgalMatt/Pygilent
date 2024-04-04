@@ -135,8 +135,10 @@ def unarchive_replicates(rep_list):
 
 
 def pivot_isotopes(df, var, index=['run_order', 'sample_name']):
-    df_piv=df.pivot_table(index=index, columns='isotope_gas', values=var, sort=False)
+    df_piv=df.pivot_table(index=index, columns='isotope_gas', values=var, sort=False, 
+                          aggfunc='first', observed=False)
     df_piv.reset_index(inplace=True)
+    df_piv.columns.name=None
     return df_piv
     
 def make_empty_batch():
@@ -144,6 +146,21 @@ def make_empty_batch():
                      'isotope_gas', 'cps_mean', 'cps_std', 
                      'rep_list', 'sample_type', 'brkt_stnd', 'cali_curve', 'ratio_iso']     
 
+
+
+def det_mode_mean_pivot(df, var='det_mode', pivot=True):
+
+    df['det_mode_digi']=df[var].str.contains('P').astype(int)
+    det_mode_mean=df.groupby(['run_order', 'isotope_gas'], sort=False, observed=False)['det_mode_digi'].agg('mean')
+    det_mode_mean=det_mode_mean.reset_index()
+    det_mode_mean['det_mode']='M'
+    det_mode_mean.loc[det_mode_mean['det_mode_digi']==1, 'det_mode']='P'
+    det_mode_mean.loc[det_mode_mean['det_mode_digi']==0, 'det_mode']='A'
+    
+    if pivot:
+        return pivot_isotopes(det_mode_mean, 'det_mode', index=['run_order']).reset_index(drop=True)
+    else:
+        return det_mode_mean['run_order', 'isotope_gas', 'det_mode']
 
 
 def archive_csv_to_batch(df, run_name=None, stnd_df=None):
@@ -275,7 +292,7 @@ def import_batch(path=None, ui=False, stnd_df=None):
     batch_df=pd.read_csv(path/'BatchLog.csv')
     batch_df.dropna(axis=0, how='all', inplace=True)
     
-    #POTENTIALLY NEED TO SPECIFY TIME FORMAT
+    #Re-format time
     batch_df.rename(columns={'Acq. Date-Time': 'time'}, inplace=True)
     
     #gets time string and converts to datetime
@@ -306,19 +323,19 @@ def import_batch(path=None, ui=False, stnd_df=None):
     batch_df['directory']=subfolder_list
 
     #Setup run info table
-    smpl_info=pd.DataFrame(np.repeat(path.name, len(batch_df)), columns=['run_name'])
-    smpl_info[['time', 'sample_name', 'vial']]=batch_df[['time', 'Sample Name', 'Vial#']]
+    batch_info=pd.DataFrame
+    batch_info[['sample_name', 'time',  'vial']]=batch_df[['Sample Name',  'Vial#', 'time']].copy()
 
     #give error if no samples found
     if len(batch_df)==0:
         raise ValueError('No valid samples found in batch log.')
     
     #Get the total elapsed time since first sample
-    smpl_info['session_time']=batch_df['time']-batch_df.loc[0,'time']
+    batch_info['session_time']=batch_df['time']-batch_df.loc[0,'time']
     #Convert to seconds
-    smpl_info['session_time']=smpl_info['session_time'].dt.total_seconds()
+    batch_info['session_time']=batch_info['session_time'].dt.total_seconds()
     
-    smpl_info['run_order']=np.arange(0, len(smpl_info))
+    batch_info['run_order']=np.arange(0, len(batch_info))
     
     #This speeds up the processing to find the gas modes and number of repeats
     from concurrent.futures import ThreadPoolExecutor
@@ -329,6 +346,37 @@ def import_batch(path=None, ui=False, stnd_df=None):
             row1 = next(reader)[0].rsplit('/')[-1].strip('\n ')
         return row1
     
+    
+    
+    
+    #Find out how many repeats and gas modes there are by reading first sample
+    first_sample_folder=subfolder_list[0]
+    #First get a directory list of all .csv files in the sample folder
+    csvlist = [s for s in os.listdir(first_sample_folder) if ".csv" in s and "quickscan" 
+                not in s and first_sample_folder.name[0:-2] in s]
+    file_paths = [first_sample_folder/c for c in csvlist]
+    
+    #Read the first file to get the number of repeats
+    first_file=pd.read_csv(file_paths[0], skiprows=list(range(0, 7)), header=0)
+    n=int(first_file['n'].values[0])
+    
+    if n > 1:
+        replicates_in_files=False
+        warnings.warn('Replicate data not found. Element ratio standard errors cannot be calculated.')
+    else:
+        replicates_in_files=True
+    
+    
+    #Then quickly (using ThreadPoolExecutor) get the gas modes from files.
+    testmode=[]
+    with ThreadPoolExecutor() as executor:
+        testmode = list(executor.map(extract_gas_mode, file_paths))
+    
+    #Get the number of repeats and gases by counting occurrences of gas modes
+    total_reps=testmode.count(list(set(testmode))[0])
+    numgases=len(set(testmode))
+    
+    compile_df=pd.DataFrame()
     #Start iterating through samples
     for s_num, subfolder in enumerate(subfolder_list):   
 
@@ -336,17 +384,7 @@ def import_batch(path=None, ui=False, stnd_df=None):
         csvlist = [s for s in os.listdir(subfolder) if ".csv" in s and "quickscan" 
                 not in s and subfolder.name[0:-2] in s]
         file_paths = [subfolder/c for c in csvlist]
-        
-        #Find out how many repeats and gas modes there are by reading first sample
-        testmode=[]
-        with ThreadPoolExecutor() as executor:
-            testmode = list(executor.map(extract_gas_mode, file_paths))
-        
 
-        #Get the number of repeats and gases by counting occurrences of gas modes
-        total_reps=testmode.count(list(set(testmode))[0])
-        numgases=len(set(testmode))
-        compile_df=pd.DataFrame()
         #iterate through replicates  
         for r in range(total_reps):
             #Empty dataframe for each repeat
@@ -391,15 +429,15 @@ def import_batch(path=None, ui=False, stnd_df=None):
                 allgas_df=pd.concat([allgas_df, gas_df], ignore_index=True)
                 
                 
-            single_rep_df=pd.DataFrame(np.array([list(smpl_info.loc[s_num])]*len(allgas_df)), 
-                                       columns=smpl_info.columns)
+            single_rep_df=pd.DataFrame(np.array([list(batch_info.loc[s_num])]*len(allgas_df)), 
+                                       columns=batch_info.columns)
             
             single_rep_df['run_order']=s_num
             single_rep_df['replicate']=r+1
             
             single_rep_df[['element', 'isotope_gas', 'mass', 'gas_mode', 'total_reps', 'det_mode', 'int_time', 
-                           'cps']]=allgas_df[['Element', 'isotope_gas', 'mass', 'gas_mode', 'n', 'det_mode', 'Time(Sec)', 
-                           'CPS']]
+                           'cps', 'sd']]=allgas_df[['Element', 'isotope_gas', 'mass', 'gas_mode', 'n', 'det_mode', 'Time(Sec)', 
+                           'CPS', 'SD']]
 
             single_rep_df['total_reps']=total_reps
             compile_df=pd.concat([compile_df, single_rep_df], axis=0)
@@ -407,14 +445,35 @@ def import_batch(path=None, ui=False, stnd_df=None):
     run_name=path.name
     
     compile_df['isotope_gas']=pd.Categorical(compile_df['isotope_gas'], categories=pd.unique(compile_df['isotope_gas']))
-    rep_df=compile_df[['run_order', 'isotope_gas', 'replicate',  'cps', 'det_mode']].copy()
-    rep_df.sort_values(by=['run_order','isotope_gas', 'replicate'], inplace=True)
+    compile_df['det_mode_digi']=compile_df['det_mode'].str.contains('P').astype(int)
     
+    
+    if replicates_in_files:
+        rep_df=compile_df[['run_order', 'isotope_gas', 'replicate',  'cps', 'det_mode']].copy()
+        rep_df.sort_values(by=['run_order','isotope_gas', 'replicate'], inplace=True)
+        means_df=rep_df.groupby(['run_order', 'isotope_gas'], sort=False, observed=False)['cps'].agg(['mean', 'std'])
+        means_df.reset_index(inplace=True, drop=False)
+        cps_mean=pivot_isotopes(means_df, 'mean', index=['run_order'])
+        cps_sd=pivot_isotopes(means_df, 'std', index=['run_order'])
+        det_mode=det_mode_mean_pivot(compile_df)
+
+        
+    else:
+        total_reps=n
+        rep_df=None
+        cps_mean=pivot_isotopes(compile_df[['run_order', 'isotope_gas',  'cps']].copy(), 'cps', index=['run_order'])
+        cps_sd=pivot_isotopes(compile_df[['run_order', 'isotope_gas',  'sd']].copy(), 'sd', index=['run_order'])
+        det_mode=pivot_isotopes(compile_df[['run_order', 'isotope_gas',  'det_mode']].copy(), 'det_mode', index=['run_order'])
+        #insert sample names
+    
+    
+    cps_mean.insert(0, 'sample_name', batch_info['sample_name'])
+    cps_sd.insert(0, 'sample_name', batch_info['sample_name'])
+    det_mode.insert(0, 'sample_name', batch_info['sample_name'])
+        
     analytes=single_rep_df[['isotope_gas', 'mass', 'element', 'mass', 'gas_mode', 'int_time']]
     
-    batch=Batch(run_name, smpl_info, total_reps, analytes, rep_df)
-
-    return batch
+    return Batch(run_name, batch_info, total_reps, analytes, rep_df, cps_mean, cps_sd, det_mode)
     
 
     
@@ -426,19 +485,20 @@ def import_batch(path=None, ui=False, stnd_df=None):
 
 class Batch:   
     
-    def __init__(self, run_name=None, smpl_info=None, total_reps=None, analytes=None, rep_df=None, 
-                 cps_mean=None, cps_sd=None, cps_ratio=None, cps_ratio_se=None, 
+    def __init__(self, run_name=None, batch_info=None, total_reps=None, analytes=None, rep_df=None, 
+                 cps_mean=None, cps_sd=None, det_mode=None, cps_ratio=None, cps_ratio_se=None, 
                  calibrated=None, calibrated_se=None, cov=None, 
                  cali_stnd_df=None, curve_mdl=None, blk_order=[], brkt_order=[], 
                  brkt_stnd=None, cali_mode=None, ratio_iso=None, 
                  cali_order={}, stnd_df=None):
         self.run_name=run_name
-        self.smpl_info=smpl_info
+        self.batch_info=batch_info
         self.total_reps=total_reps
         self.analytes=analytes
         self.rep_df=rep_df
         self.cps_mean=cps_mean
         self.cps_sd=cps_sd
+        self.det_mode=det_mode
         self.cps_ratio=cps_ratio
         self.cps_ratio_se=cps_ratio_se
         self.calibrated=calibrated
