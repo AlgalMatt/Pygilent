@@ -288,7 +288,7 @@ def pickfig(df, xvar, title):
     fig, ax = plt.subplots()
     scatter1, = ax.plot([], [], linestyle='None', marker='o', color='red', picker=5)
     scatter2, = ax.plot([], [], linestyle='None', marker='o', color='blue')
-    ax.set_xlabel('Analysis time (hours)')
+    ax.set_xlabel(xvar)
     ax.set_ylabel(variable)
     ax.legend(['Remove', 'Keep'])
     

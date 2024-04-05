@@ -323,8 +323,8 @@ def import_batch(path=None, ui=False, stnd_df=None):
     batch_df['directory']=subfolder_list
 
     #Setup run info table
-    batch_info=pd.DataFrame
-    batch_info[['sample_name', 'time',  'vial']]=batch_df[['Sample Name',  'Vial#', 'time']].copy()
+    batch_info=pd.DataFrame()
+    batch_info[['sample_name',   'vial','time']]=batch_df[['Sample Name',  'Vial#', 'time']].copy()
 
     #give error if no samples found
     if len(batch_df)==0:
@@ -336,6 +336,7 @@ def import_batch(path=None, ui=False, stnd_df=None):
     batch_info['session_time']=batch_info['session_time'].dt.total_seconds()
     
     batch_info['run_order']=np.arange(0, len(batch_info))
+    batch_info['sample_type']='sample'
     
     #This speeds up the processing to find the gas modes and number of repeats
     from concurrent.futures import ThreadPoolExecutor
@@ -477,18 +478,44 @@ def import_batch(path=None, ui=False, stnd_df=None):
     
 
     
-    
+def add_batch_to_archive(batch, archive_df):
+    pass
             
+
+def select_run_order(batch, run_order=np.array([], dtype=int), how='manual', keyword=None, case=False, sample_type='sample'):
+    
+    if sample_type == 'blank' and keyword is None:
+        keyword='blk'
+    
+    if how=='auto':
+        if keyword is None:
+            raise ValueError('Keyword required for auto method.')
+        run_order=batch.batch_info.loc[batch.batch_info['sample_name'].str.contains(keyword, case=case), 'run_order'].values
+    elif how=='manual':
+        run_order=np.array(run_order)
+    else:
+        from Pygilent.uitools import fancycheckbox
+        if keyword is not None:
+            idx=fancycheckbox(batch.batch_info['sample_name'], 'Select bracket standards', 
+                                     defaults=batch.batch_info['sample_name'].str.contains(keyword, case=case))  
+        else:
+            idx=fancycheckbox(batch.batch_info['sample_name'], 'Select bracket standards')
+        run_order=batch.batch_info.loc[idx, 'run_order'].values
+    return run_order
+
+
+
 
 ## Classes
 
 
 class Batch:   
+    modes=('ratio curve', 'ratio single', 'conc curve', 'conc single')
     
     def __init__(self, run_name=None, batch_info=None, total_reps=None, analytes=None, rep_df=None, 
                  cps_mean=None, cps_sd=None, det_mode=None, cps_ratio=None, cps_ratio_se=None, 
                  calibrated=None, calibrated_se=None, cov=None, 
-                 cali_stnd_df=None, curve_mdl=None, blk_order=[], brkt_order=[], 
+                 cali_stnd_df=None, curve_mdl=None, blk_order=np.array([], dtype=int), brkt_order=np.array([], dtype=int), 
                  brkt_stnd=None, cali_mode=None, ratio_iso=None, 
                  cali_order={}, stnd_df=None):
         self.run_name=run_name
@@ -506,25 +533,66 @@ class Batch:
         self.cov=cov
         self.cali_stnd_df=cali_stnd_df
         self.curve_mdl=curve_mdl
-        self.blk_order=blk_order
-        self.brkt_order=brkt_order
+        if not np.all(np.isin(blk_order, self.batch_info['run_order'].values)):
+            raise ValueError(f'Invalid bracket order. Must be from array of run orders: ({self.batch_info['run_order'].values.min()} - {self.batch_info['run_order'].values.max()}).')
+        self.blk_order=np.array(blk_order, dtype=int)
+        if not np.all(np.isin(brkt_order, self.batch_info['run_order'].values)):
+            raise ValueError(f'Invalid bracket order. Must be from array of run orders: ({self.batch_info['run_order'].values.min()} - {self.batch_info['run_order'].values.max()}).')
+        self.brkt_order=np.array(brkt_order, dtype=int)
+
+        
         self.brkt_stnd=brkt_stnd
+        
+        if cali_mode is not None:
+            if cali_mode.lower() in ['ca check', 'ca_check','check', 'conc check']:
+                warnings.warn('Conc check mode selected. Calibration mode will be set to conc single.')
+                self.cali_mode = 'conc single'
+            if cali_mode.lower() not in self.modes:
+                raise ValueError(f'Invalid calibration mode. Please select from the following: {self.modes}.')
         self.cali_mode=cali_mode
+        
         self.ratio_iso=ratio_iso
         self.cali_order=cali_order
         self.stnd_df=stnd_df
     
-    def set_cali_mode(self, mode):
+    
+    def identify_blks(self, blk_order=np.array([], dtype=int), how='auto', keyword='blk', case=False):
         
-        modes=['ratio curve', 'ratio single', 'conc curve', 'conc single']
-        Ca_check=['ca check', 'ca_check','check', 'conc check']
-        if mode.lower() in Ca_check:
-            warnings.warn('Conc check mode selected. Calibration mode will be set to conc single.')
-            self.cali_mode = 'conc single'
-        if mode.lower() not in modes:
-            raise ValueError('Invalid calibration mode. Please select from the following: ratio curve, ratio single, conc curve, conc single.')
+        if how not in ['auto', 'manual', 'ui']:
+            raise ValueError('Invalid method. Please select from: auto, manual, ui.')
+
+        #reset the original bracket order
+        self.batch_info.loc[self.blk_order, 'sample_type']='sample'
+        sample_type='blank'
+        self.blk_order=select_run_order(self, blk_order, how, keyword, case, sample_type)
+        self.batch_info.loc[self.blk_order, 'sample_type']=sample_type
+            
+    def check_blks(self):
+        from Pygilent.uitools import pickfig
+        cpsblank=self.cps_mean.loc[self.blk_order, np.append('run_order', self.analytes['isotope_gas'].values)]
+        deblank=pickfig(cpsblank, 'run_order', 'Click on blanks to remove outliers')
+        self.blk_order=self.blk_order[~np.in1d(self.blk_order, deblank)]
+        self.batch_info.loc[self.blk_order, 'sample_type']='blank'
+
+
+    def identify_brkt_stnds(self, brkt_order=np.array([], dtype=int), how='manual', keyword=None, case=False):
+        if how not in ['auto', 'manual', 'ui']:
+            raise ValueError('Invalid method. Please select from: auto, manual, ui.')
+
+        #reset the original bracket order
+        self.batch_info.loc[self.brkt_order, 'sample_type']='sample'
+        sample_type='bracket'
+        self.brkt_order=select_run_order(self, brkt_order, how, keyword, case, sample_type)
+        self.batch_info.loc[self.brkt_order, 'sample_type']=sample_type
+    
+    
+    def identify_cali_stnds(self, cali_run_order=np.array([], dtype=int), cali_dict={}, 
+                            how='manual', keyword='cali', case=False):
+        if how not in ['auto', 'manual', 'ui']:
+            raise ValueError('Invalid method. Please select from: auto, manual, ui.')
         
-        self.cali_mode = mode
+        pass
+    
         
     def initialize(self):
         #check if the batch has correct attributes to proceed
