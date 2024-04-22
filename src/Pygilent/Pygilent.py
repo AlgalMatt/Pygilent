@@ -627,7 +627,7 @@ class Batch:
         self.stnd_df=stnd_df
     
     
-    def identify_blks(self, blk_order=np.array([], dtype=int), how='auto', keyword='blk', case=False):
+    def set_blks(self, blk_order=np.array([], dtype=int), how='auto', keyword='blk', case=False):
         
         if how not in ['auto', 'manual', 'ui']:
             raise ValueError('Invalid method. Please select from: auto, manual, ui.')
@@ -646,7 +646,7 @@ class Batch:
         self.batch_info.loc[self.blk_order, 'sample_type']='blank'
 
 
-    def identify_brkt_stnds(self, brkt_order=np.array([], dtype=int), how='manual', keyword=None, case=False):
+    def set_brkt_stnds(self, brkt_order=np.array([], dtype=int), how='manual', keyword=None, case=False):
         if how not in ['auto', 'manual', 'ui']:
             raise ValueError('Invalid method. Please select from: auto, manual, ui.')
 
@@ -710,7 +710,7 @@ class Batch:
         else:
             ratio_element=deconstruct_isotope_gas(list(self.ratio_iso.values())[0], output='element')
         
-        if self.cali_mode is 'conc single' and single_conc_dilution is None:
+        if self.cali_mode == 'conc single' and single_conc_dilution is None:
             raise ValueError('Single conc dilution not set. Please set single conc dilution.')
         
         if how =='ui':
@@ -816,7 +816,9 @@ class Batch:
                                                isotopes=self.analytes['isotope_gas'].values, 
                                                cali_mode=self.cali_mode, dilutions=list(self.cali_order.keys()), 
                                                units=units)
-            
+        
+        for key, val in self.cali_order.items():
+            self.batch_info.loc[val, 'calibrant']=key
 
             
                 

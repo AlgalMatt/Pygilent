@@ -4,6 +4,7 @@ from tkinter.scrolledtext import ScrolledText
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
+import pandas as pd
 
 def select_folder(title="Select a folder"):
     """
@@ -622,8 +623,9 @@ def display_dataframe_with_option(df):
     
     return result  # Return the result after the window is destroyed
 
-def stndblk_picker(cps_df, sd_df, pa_df, table_df, title, outmod):
+def stndblk_picker(cps_df, sd_df, pa_df, table_df, title, outmod, isotopes):
     
+    from Pygilent.pygilent import find_outliers
     
     global selected_ind, variable
     xvar=cps_df['session_time'].values/3600
@@ -693,7 +695,7 @@ def stndblk_picker(cps_df, sd_df, pa_df, table_df, title, outmod):
         variable = dropdown_var.get()
         
         #Show the outliers recommended for removal
-        outs=outsbool(cps_df.loc[df_index, variable].astype(float), mod=outmod)
+        outs=find_outliers(cps_df.loc[df_index, variable].astype(float), mod=outmod)
         
         #calculate the means, sd and quartiles
         iso_mean=np.nanmean(cps_df_modified.loc[df_index, variable])
@@ -954,13 +956,15 @@ def blankfigsaver(df1, df2, iso_vars, variable='cps_mean',  title='Blanks CPS',
     blankfigsaver(df1, df2, iso_vars=['A', 'B'])
     """
     
+    from Pygilent.pygilent import find_outliers
+    
     global iso
     iso=iso_vars[0]
     
     #Isolate one element
     df1_el=df1.loc[df1['isotope_gas']==iso]
     if df1_el.size>0:
-        outs=outsbool(np.array(df1_el[variable]))
+        outs=find_outliers(np.array(df1_el[variable]))
         df1_el=df1_el.loc[~outs]
     df2_el=df2.loc[df2['isotope_gas']==iso]
     
@@ -984,7 +988,7 @@ def blankfigsaver(df1, df2, iso_vars, variable='cps_mean',  title='Blanks CPS',
             df1_elb=df1.loc[df1['isotope_gas']==el]
             #remove outliers from archive
             if df1_elb.size>0:
-                outs=outsbool(np.array(df1_elb[variable]))
+                outs=find_outliers(np.array(df1_elb[variable]))
                 df1_elb=df1_elb.loc[~outs]
             df2_elb=df2.loc[df2['isotope_gas']==el]
                
@@ -1040,7 +1044,7 @@ def blankfigsaver(df1, df2, iso_vars, variable='cps_mean',  title='Blanks CPS',
         #Get specific isotope data, remove outliers from archive   
         df1_el=df1.loc[df1['isotope_gas']==iso]
         if df1_el.size>0:
-            outs=outsbool(np.array(df1_el[variable]))
+            outs=find_outliers(np.array(df1_el[variable]))
             df1_el=df1_el.loc[~outs]        
         
         df2_el=df2.loc[df2['isotope_gas']==iso]
@@ -1630,6 +1634,8 @@ def repeditor(df, pa, title, table_df, id, repnames, repPA_all_df, outmod=1.5):
     modified_df = repeditor(df, pa, "Interactive Editor", table_df, 1)
     """
     
+    from Pygilent.pygilent import find_outliers
+    
     global selected_ind, variable
     xvar=np.arange(len(repnames))+1
     df2=df.copy()
@@ -1697,7 +1703,7 @@ def repeditor(df, pa, title, table_df, id, repnames, repPA_all_df, outmod=1.5):
         variable = dropdown_var.get()
         
         #Show the outliers recommended for removal
-        outs=outsbool(df.loc[variable, repnames].astype(float), mod=outmod)
+        outs=find_outliers(df.loc[variable, repnames].astype(float), mod=outmod)
         
         #calculate the means, sd and quartiles
         iso_mean=np.nanmean(df2.loc[variable,repnames])

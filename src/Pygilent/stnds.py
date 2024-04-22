@@ -18,11 +18,11 @@ def make_stndvals_df(df, stnd_names, isotopes, cali_mode, dilutions=np.array([])
     if units not in ['moles', 'grams']:
         raise ValueError('Invalid units. Please select from: moles or grams.')
     
-    """
-    if 'ratio curve' not in cali_mode:        
-        if len(stnd_names)!=1 and type(stnd_names)!=str:
-            raise ValueError(f'Only one standard type can be used for {cali_mode}.')
     
+    if  cali_mode=='conc curve':        
+        if len(stnd_names)!=1 and type(stnd_names)!=str:
+            raise ValueError(f'Only one standard name can be used for {cali_mode}.')
+    """
     if 'conc single' in cali_mode and len(dilutions)>1:
         raise ValueError(f'Only one dilution can be used for {cali_mode}.')
     """
@@ -34,6 +34,10 @@ def make_stndvals_df(df, stnd_names, isotopes, cali_mode, dilutions=np.array([])
     else:
         dilutions=np.array(dilutions)
     
+    if len(stnd_names)<2 and cali_mode=='ratio curve':
+            raise ValueError(f'More than one standard name must be provided for {cali_mode}.')
+        
+    
     from Pygilent.pygilent import deconstruct_isotope_gas
     
     units_array=df.loc[deconstruct_isotope_gas(isotopes, 'element'), 'units'].values
@@ -44,14 +48,17 @@ def make_stndvals_df(df, stnd_names, isotopes, cali_mode, dilutions=np.array([])
 
         
         elements=deconstruct_isotope_gas(isotopes, 'element')
-        new_df=pd.DataFrame([], columns=dilutions, index=isotopes)
+        col_names=np.char.add(dilutions.astype(str), '_'+stnd_names[0])
+        new_df=pd.DataFrame([], columns=col_names, index=isotopes)
         vals_arr=df.loc[elements, stnd_names].values
-        new_df[dilutions]=dilutions*vals_arr
+        new_df[col_names]=dilutions*vals_arr
         new_df.insert(0, 'units', units_array)
         
     else:
         if ratio_element is None:
             raise ValueError(f'Ratio element must be provided for {cali_mode}.')
+
+        
         ratio_el_arr=df.loc[ratio_element, stnd_names].values
         new_df=df.loc[deconstruct_isotope_gas(isotopes, 'element'), stnd_names]
         new_df=new_df/ratio_el_arr
@@ -68,11 +75,11 @@ def make_stndvals_df(df, stnd_names, isotopes, cali_mode, dilutions=np.array([])
         masses=np.array(get_atomic_mass(deconstruct_isotope_gas(isotopes, 'element'), out_type=float))
         new_df.iloc[:,1:]=new_df.iloc[:,1:]/masses[:, None]
         #replace 'g' with 'mol'
-        new_df['units']=(pd.Series(units_array).str.replace('g', 'mol')+' '+ratio_element).values
+        new_df['units']=(pd.Series(units_array).str.replace('g', 'mol')).values
         if 'ratio' in cali_mode:
             ratio_el_mass=get_atomic_mass(ratio_element, out_type=float)
             new_df.loc[:,stnd_names]=new_df.loc[:,stnd_names]*ratio_el_mass
-        
+            new_df['units']=new_df['units']+' '+ratio_element
         
     return new_df
 
