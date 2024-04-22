@@ -151,7 +151,8 @@ def fancycheckbox(items,  title="", defaults=None, single=False):
     return selected_indexes
 
 
-def fancycheckbox_2window(items_1, items_2,  title_1="", title_2="", defaults=None, single=False):
+def fancycheckbox_2window(items_1, items_2,  title_1="", title_2="", 
+                          defaults=None, single_1=False, single_2=False):
     """    
     Creates a pop-up simple checkbox from a list of items. Returns indexes of 
     the checked items.
@@ -215,6 +216,13 @@ def fancycheckbox_2window(items_1, items_2,  title_1="", title_2="", defaults=No
     # Function to update the list of selected items 1
     def update_selected_1(var):
         global selected_1
+        
+        if single_1:
+            for i in range(len(cb_vars_1)):
+                if i != var:
+                    cb_vars_1[i].set(False)
+                    cb_vars_1[i]['bg']='white'
+        
         item_2_selected=np.array(items_2)[selected_2][0]
         selected_1[item_2_selected] = [cb_vars_1[i].get() for i in range(len(cb_vars_1))]
         if cb_vars_1[var].get():
@@ -230,8 +238,8 @@ def fancycheckbox_2window(items_1, items_2,  title_1="", title_2="", defaults=No
                 array[idx]=False
                 selected_1[key]=list(array)
         
-        #if single is True, only one item 2 can be selected
-        if single:
+        #if single_2 is True, only one item 2 can be selected
+        if single_2:
             for key, value in selected_1.items():
                 if item_2_selected!=key:
                     selected_1[key]=[False]*len(items_1)

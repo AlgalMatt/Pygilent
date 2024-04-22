@@ -618,7 +618,11 @@ class Batch:
                 raise ValueError(f'Invalid calibration mode. Please select from the following: {self.modes}.')
         self.cali_mode=cali_mode
         
+
         self.ratio_iso=ratio_iso
+        
+        
+        
         self.cali_order=cali_order
         self.stnd_df=stnd_df
     
@@ -653,18 +657,64 @@ class Batch:
         self.batch_info.loc[self.brkt_order, 'sample_type']=sample_type
     
     
-    def identify_cali_stnds(self, stnd_vals_df, cali_run_order=np.array([], dtype=int), cali_order={}, 
-                            how='manual', keyword=None, cali_stnd_df=None):
+    def set_ratio_iso(self, how='manual', ratio_isos=None):
+        
+        if how not in ['manual', 'ui']:
+            raise ValueError('Invalid method. Please select from: manual or ui.')
+
+        
+        if how=='manual':  
+            if type(ratio_isos) is not dict:
+                raise TypeError('Ratio isotopes must be a dictionary of gas_mode: ratio_isotope.')
+            if len(ratio_isos) != len(pd.unique(self.analytes['gas_mode'])):
+                raise ValueError('Number of ratio isotopes must match number of gas modes.')
+            
+    
+        if how =='ui':
+            from Pygilent.uitools import fancycheckbox_2window
+            items_1=pd.unique(self.analytes['gas_mode'])
+            items_2=pd.unique(self.analytes['isotope_gas'])
+            ratio_isos=fancycheckbox_2window(items_1, items_2, 
+                                             title_1='Select gas mode', 
+                                             title_2='Select ratio isotope', 
+                                             single_1=True, single_2=True)
+        
+        
+        for key, val in ratio_isos.items():
+            if type(val) is not str:
+                raise TypeError('Ratio isotopes must be strings.')
+            if val not in pd.unique(self.analytes['isotope_gas']):
+                raise ValueError(f'{val} is not a valid isotope gas.')
+            if key not in pd.unique(self.analytes['gas_mode']):
+                raise ValueError(f'{key} is not a valid gas mode.')
+        
+        ratio_element_list=[deconstruct_isotope_gas(x, output='element') for x in ratio_isos.values()]
+        if len(np.unique(ratio_element_list))>1:
+            raise ValueError('Each ratio isotope must be the same element.')
+            
+        self.ratio_iso=ratio_isos
+
+            
+    
+    def set_cali_stnds(self, stnd_vals_df, cali_run_order=np.array([], dtype=int), cali_order={}, 
+                            how='manual', keyword=None, cali_stnd_df=None, single_conc_dilution=None, 
+                            units='moles'):
         if how not in ['auto', 'manual', 'ui']:
             raise ValueError('Invalid method. Please select from: auto, manual, ui.')
         
         if self.cali_mode is None:
             raise ValueError('Calibration mode not set. Please set calibration mode.')
         
+        if self.ratio_iso is None:
+            raise ValueError('Ratio isotopes not set. Please set ratio isotopes.')
+        else:
+            ratio_element=deconstruct_isotope_gas(list(self.ratio_iso.values())[0], output='element')
         
+        if self.cali_mode is 'conc single' and single_conc_dilution is None:
+            raise ValueError('Single conc dilution not set. Please set single conc dilution.')
         
         if how =='ui':
-            from Pygilent.uitools import fancycheckbox, fancycheckbox_2window
+            from Pygilent.uitools import fancycheckbox_2window
         
         from pandas.api.types import is_numeric_dtype
         stnd_vals_names = np.array([cols for cols in stnd_vals_df.columns if is_numeric_dtype(stnd_vals_df[cols])])
@@ -694,8 +744,17 @@ class Batch:
                     idx=np.isin(self.batch_info.loc[cali_run_order, 'sample_name'] , name)
                     self.cali_order[k]=cali_run_order[idx]
             #make cali_stnd_df
-            self.cali_stnd_df=make_stndvals_df(stnd_vals_df, list(self.cali_order.keys()), 
-                                               self.analytes['isotope_gas'].values)
+            if self.cali_mode == 'ratio single':
+                self.cali_stnd_df=make_stndvals_df(df=stnd_vals_df, stnd_names=list(self.cali_order.keys()), 
+                                               isotopes=self.analytes['isotope_gas'].values, 
+                                               cali_mode=self.cali_mode, ratio_element=ratio_element, 
+                                               units=units)
+            else:
+                self.cali_stnd_df=make_stndvals_df(df=stnd_vals_df, stnd_names=list(self.cali_order.keys()), 
+                                               isotopes=self.analytes['isotope_gas'].values, 
+                                               cali_mode=self.cali_mode, dilutions=single_conc_dilution, 
+                                               units=units)
+                
         elif self.cali_mode == 'ratio curve':
             if how =='auto' & keyword is None:
                 raise ValueError('Keyword required for auto method.')
@@ -708,8 +767,14 @@ class Batch:
                                                 associate_defaults, 'Associate calibration standards with standards list')
             else:
                 cali_dict=associate_defaults
-            cali_order={k: self.batch_info.loc[v, 'run_order'] for k, v in cali_dict.items() if np.any(v)}
-            self.cali_stnd_df=make_stndvals_df(stnd_vals_df, list(self.cali_order.keys()), self.analytes['isotope_gas'].values)
+            self.cali_order={k: self.batch_info.loc[v, 'run_order'] for k, v in cali_dict.items() if np.any(v)}
+            
+            #make cali_stnd_df
+            self.cali_stnd_df=make_stndvals_df(df=stnd_vals_df, stnd_names=list(self.cali_order.keys()), 
+                                               isotopes=self.analytes['isotope_gas'].values, 
+                                               cali_mode=self.cali_mode, ratio_element=ratio_element, 
+                                               units=units)
+            
         
         elif self.cali_mode == 'conc curve': 
             if how =='auto' & keyword is None:
@@ -740,12 +805,18 @@ class Batch:
             else:
                 stnd_conc_dict=dict(zip(unique_stnd_names, np.array(stnd_conc_defaults).astype(float)))
 
-            cali_order={val:[] for val in stnd_conc_dict.values()}
+            self.cali_order={val:[] for val in stnd_conc_dict.values()}
 
             for key, val in stnd_conc_dict.items():
                 key_rows=cali_rows[self.batch_info.loc[cali_rows, 'sample_name']==key]
-                cali_order[val].extend(list(key_rows))
-            self.cali_stnd_df=make_stndvals_df(stnd_vals_df, [stnd_name], self.analytes['isotope_gas'].values)
+                self.cali_order[val].extend(list(key_rows))
+            
+            #make cali_stnd_df
+            self.cali_stnd_df=make_stndvals_df(df=stnd_vals_df, stnd_names=list(self.cali_order.keys()), 
+                                               isotopes=self.analytes['isotope_gas'].values, 
+                                               cali_mode=self.cali_mode, dilutions=list(self.cali_order.keys()), 
+                                               units=units)
+            
 
             
                 

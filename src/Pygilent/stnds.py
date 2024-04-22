@@ -56,7 +56,8 @@ def make_stndvals_df(df, stnd_names, isotopes, cali_mode, dilutions=np.array([])
         new_df=df.loc[deconstruct_isotope_gas(isotopes, 'element'), stnd_names]
         new_df=new_df/ratio_el_arr
         ratio_el_unit=df.loc[ratio_element, 'units']
-        new_df.insert(0, 'units', units_array)  
+        
+        new_df.insert(0, 'units', units_array+' '+ratio_element)  
         new_df['units']=new_df['units'].apply(convert_units_to_ratio, denominator_unit=ratio_el_unit)
     
         
@@ -67,7 +68,7 @@ def make_stndvals_df(df, stnd_names, isotopes, cali_mode, dilutions=np.array([])
         masses=np.array(get_atomic_mass(deconstruct_isotope_gas(isotopes, 'element'), out_type=float))
         new_df.iloc[:,1:]=new_df.iloc[:,1:]/masses[:, None]
         #replace 'g' with 'mol'
-        new_df['units']=new_df['units'].str.replace('g', 'mol')
+        new_df['units']=(pd.Series(units_array).str.replace('g', 'mol')+' '+ratio_element).values
         if 'ratio' in cali_mode:
             ratio_el_mass=get_atomic_mass(ratio_element, out_type=float)
             new_df.loc[:,stnd_names]=new_df.loc[:,stnd_names]*ratio_el_mass
