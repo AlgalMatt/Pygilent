@@ -1,74 +1,38 @@
-import numpy as np
 import tkinter as tk
 from tkinter import ttk
 from tkinter.scrolledtext import ScrolledText
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import matplotlib
-import pandas as pd
+import numpy as np
 
-def contains1d(array1, string1, ret_array=True, case_sensitive=False):
+def select_folder(title="Select a folder"):
     """
-    Looks for occurrences of substring(s) within an array of strings, returning
-    a boolean array. Works similarly to the Pandas str.contains method but can 
-    for multiple strings in a list.
-    
-    Parameters
-    ----------
-    array1 : 1d array (list, numpy array)
-        array to search.
-    string1 : string, or 1d array of strings (list or numpy array)
-        substrings used to search for within array1.
-    ret_array : boolean, optional
-        If true, then the output will be a boolean 1d array of the same size 
-        as array1, providing True/False values for each element that 
-        contains/does not contain any of the substrings within string1. 
-        If false, then the output will be a matrix of len(array1) by
-        len(string1) with each column being a separate boolean array of 
-        occurrences of each substring in string1 within array1.
-        The default is True.
-    case_sensitive : boolean, optional
-        If true, the search will be case-sensitive. The default is False.
+    Opens a dialog box to select a folder.
 
-    Returns
-    -------
-    retarray : numpy array or matrix of len(array1)
-        An array of boolean values where True values indicate the presence of the 
-        substring, string1, at the same index of array1. An element-wise 
-        string1 in array1.
+    Parameters:
+    - title (str): The title of the dialog box. Defaults to 'Select a folder'.
+
+    Returns:
+    - str: The path of the selected folder.
+
+    Usage:
+    - Call the function with an optional title parameter to open a dialog box.
+    - The user can select a folder using the dialog box.
+    - The function returns the path of the selected folder.
+
+    Example:
+    folder_path = select_folder("Select the folder containing the data files")
+    print(f"Selected folder: {folder_path}")
 
     """
-    
-    #vectorize lower cases
-    nlower=np.vectorize(str.lower)
-    
-    retarray=[]
-    #if argument string1 is a single string
-    if type(string1)==str:
-        #lower all cases
-        if case_sensitive==False:
-            array1=nlower(array1)
-            string1=string1.lower()
-        for i in array1:
-            retarray.append(string1 in i)   
-    #if string1 is a list of strings             
-    else:
-        #lower all cases
-        if case_sensitive==False:
-            array1=nlower(array1)
-            string1=nlower(string1)
-        retarray=np.full((len(array1), len(string1)), False)
-        #iterate over the list of substrings
-        for j, s in enumerate(string1):
-            #iterate over the array of strings a check if the iterated 
-            #substring is in it            
-            for i, a in enumerate(array1):
-                retarray[i, j]=s in a
-        #if true, return a 1D array, else it returns a len(array1) by 
-        #len(string1) matrix of occurrences of each substring within the array
-        if ret_array:
-            retarray=np.any(retarray, axis=1)           
-    return retarray
+    from tkinter import filedialog
+    root=tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    folder_select=filedialog.askdirectory(title=title)
+    root.destroy()
+    return folder_select
+
 def fancycheckbox(items,  title="", defaults=None, single=False):
     """    
     Creates a pop-up simple checkbox from a list of items. Returns indexes of 
@@ -153,7 +117,7 @@ def fancycheckbox(items,  title="", defaults=None, single=False):
     
     # Create a list to store the checkbox variables
     cb_vars = []
-       
+
     #The title of the window
     label=tk.Label(window, text=title, font=("Helvetica", 10))
     label.grid(row=0, column=0, pady=5)
@@ -181,15 +145,199 @@ def fancycheckbox(items,  title="", defaults=None, single=False):
     submit_button.grid(row=2, column=0)
     
     
-    
-    # Create a "Submit" button
-   # select_all_button = tk.Button(window, text="Select all", command=select_all())
-   # select_all_button.grid(row=2, column=0)
-    
     # Run the main loop
     window.mainloop()
     selected_indexes = np.array([i for i, x in enumerate(selected) if x])
     return selected_indexes
+
+
+def fancycheckbox_2window(items_1, items_2,  title_1="", title_2="", 
+                          defaults=None, single_1=False, single_2=False):
+    """    
+    Creates a pop-up simple checkbox from a list of items. Returns indexes of 
+    the checked items.
+
+    Parameters
+    ----------
+    items : 1d array (list or numpy array)
+        list of items to fill the checkbox.
+    title : string, optional
+        Descriptive title of the checkbox window. The default is "".
+    defaults : boolean array, optional
+        Indexes which items to have check boxes ticked by default. 
+        The default is None.
+    single : boolean, optional
+        If true, only one checkbox can be selected. The default is False.
+
+    Returns
+    -------
+    selected_indexes : numpy.array
+        array of indexes of checked items.
+
+    """
+    global selected_1, selected_2
+    #if no defaults used, create a list of False to implement defaults.
+    if defaults is None:
+        defaults={key: [False]*len(items_1) for key in items_2}
+    #Otherwise fill in the remainder of the dictionary with False
+    else:
+        for key in np.setdiff1d(items_2, list(defaults.keys())): 
+            defaults[key]=[False]*len(items_1)
+    
+    selected_1=defaults.copy()
+    selected_2=np.append([True], [False]*(len(items_2)-1))
+
+    # Create the main window
+    window = tk.Tk()
+    #Keep the window at the front of other apps.
+    window.lift()
+    window.attributes("-topmost", True)
+    
+    
+    
+    w = 700 # width for the Tk root
+    h = 700 # height for the Tk root
+    
+    # get screen width and height
+    ws = window.winfo_screenwidth() # width of the screen
+    hs = window.winfo_screenheight() # height of the screen
+    
+    # calculate x and y coordinates for the Tk root window
+    x = (ws/2) - (w/2)
+    y = (hs/2) - (h/2)
+    
+    # set the dimensions of the screen 
+    # and where it is placed
+    window.geometry('%dx%d+%d+%d' % (w, h, x, y))
+    
+    #make sure scrolling area always fills the window area
+    window.rowconfigure(1, weight=1)
+
+    # Function to update the list of selected items 1
+    def update_selected_1(var):
+        global selected_1
+        
+        if single_1:
+            for i in range(len(cb_vars_1)):
+                if i != var:
+                    cb_vars_1[i].set(False)
+                    cb_vars_1[i]['bg']='white'
+        
+        item_2_selected=np.array(items_2)[selected_2][0]
+        selected_1[item_2_selected] = [cb_vars_1[i].get() for i in range(len(cb_vars_1))]
+        if cb_vars_1[var].get():
+            cb_list_1[var]['bg']='yellow'
+        else:
+            cb_list_1[var]['bg']='white'
+        
+        #make sure only one item 2 is associated with each item 1
+        for key, value in selected_1.items():
+            if item_2_selected!=key:
+                idx=np.array(selected_1[item_2_selected]) & np.array(value)
+                array=np.array(selected_1[key])
+                array[idx]=False
+                selected_1[key]=list(array)
+        
+        #if single_2 is True, only one item 2 can be selected
+        if single_2:
+            for key, value in selected_1.items():
+                if item_2_selected!=key:
+                    selected_1[key]=[False]*len(items_1)
+    
+        # Function to update the list of selected items 2 
+    def update_selected_2(var2):
+        global selected_2   
+        #only allow one to be selected     
+        for i in range(len(cb_vars_2)):
+            if i != var2:
+                cb_vars_2[i].set(False)
+                cb_list_2[i]['bg']='white'
+        selected_2 = [cb_vars_2[i].get() for i in range(len(cb_vars_2))]
+        if cb_vars_2[var2].get():
+            cb_list_2[var2]['bg']='yellow'
+        else:
+            cb_list_2[var2]['bg']='white'
+        item_2_selected=np.array(items_2)[selected_2][0]
+        
+        for i, booleon in enumerate(selected_1[item_2_selected]):
+            cb_vars_1[i].set(booleon)
+            if booleon:
+                cb_list_1[i]['bg']='yellow'
+            else:
+                cb_list_1[i]['bg']='white'
+        
+
+
+    #The title of the 1st window
+    label=tk.Label(window, text=title_1, font=("Helvetica", 10))
+    label.grid(row=0, column=0, pady=5)
+    #The title of the 2nd window
+    label=tk.Label(window, text=title_2, font=("Helvetica", 10))
+    label.grid(row=0, column=1, pady=5)
+
+    #make the window scrollable
+    textframe=ScrolledText(window, width=40, height=50)
+    textframe.grid(row=1, column=0, sticky='nsw', rowspan=2)
+    # Create a list to store the checkbox variables
+    cb_vars_1 = []
+    cb_list_1=[]
+    
+    
+    item_selected=np.array(items_2)[selected_2][0]
+    # Create checkboxes for window 1
+    for i, item in enumerate(items_1):
+        
+        cb_var = tk.BooleanVar()
+        cb = tk.Checkbutton(textframe, text=item, variable=cb_var,
+                            command=lambda var=i: update_selected_1(var), 
+                            font=("Arial",10),fg="black", bg="white")
+        
+        cb_list_1.append(cb)
+        textframe.window_create('end', window=cb)
+        textframe.insert('end', '\n')
+        cb_vars_1.append(cb_var)
+        if defaults[item_selected][i]:
+            cb.select()
+            cb['bg']='yellow'
+    
+    
+    
+    # create second textframe window
+    textframe2=ScrolledText(window, width=40, height=50)
+    textframe2.grid(row=1, column=1, sticky='nse', rowspan=2)
+    cb_vars_2 = []
+    cb_list_2=[]
+    for j, item2 in enumerate(items_2):
+        cb_var2 = tk.BooleanVar()
+        cb2 = tk.Checkbutton(textframe2, text=item2, variable=cb_var2,
+                            command=lambda var2=j: update_selected_2(var2), 
+                            font=("Arial",10),fg="black", bg="white")
+        
+        cb_list_2.append(cb2)
+        textframe2.window_create('end', window=cb2)
+        textframe2.insert('end', '\n')
+        cb_vars_2.append(cb_var2)
+        if j==0:
+            cb2.select()
+            cb2['bg']='yellow'
+    
+    
+    
+
+    # Create a "Submit" button
+    submit_button = tk.Button(window, text="Submit", command=lambda: window.destroy())
+    submit_button.grid(row=3, column=0, columnspan=2)
+    
+    
+    # Run the main loop
+    window.mainloop()
+    #selected_indexes = np.array([i for i, x in enumerate(selected) if x])
+    return selected_1
+
+
+
+
+
 def textinputbox(title=""):
     """
     Creates a simple text input box window.
@@ -254,35 +402,8 @@ def textinputbox(title=""):
     buttonSave.grid(row=2, column=0)  
     
     tk.mainloop()   
-    return inputValue   
-def outsbool(array1, mod=1.5):
-    """
-    Returns boolean array where true values denote outliers in original array
-    
-    Parameters
-    ----------
-    array1 : 1d or 2d array (numpy array)
-        array to search for outliers.
-    mod : modifier of outlier distance (iqr multiplier), default 1.5.
+    return inputValue  
 
-    Returns
-    -------
-    retarray : numpy array of len(array1)
-        An array of boolean values where True values indicate the presence of 
-        outliers at the same index of array1.
-
-    """
-    array1=np.array(array1, dtype=float)
-    array1=array1.flatten()
-    x = array1[~np.isnan(array1)]
-    if len(x)>2:
-        q75, q25 = np.percentile(x, [75 ,25])
-        iqr = q75 - q25
-        outs=((array1>iqr*mod+q75) | (array1<q25-iqr*mod))
-    else:
-        outs=np.isnan(array1)
-        
-    return outs
 def pickfig(df, xvar, title):
     
     """
@@ -350,7 +471,7 @@ def pickfig(df, xvar, title):
     fig, ax = plt.subplots()
     scatter1, = ax.plot([], [], linestyle='None', marker='o', color='red', picker=5)
     scatter2, = ax.plot([], [], linestyle='None', marker='o', color='blue')
-    ax.set_xlabel('Analysis time (hours)')
+    ax.set_xlabel(xvar)
     ax.set_ylabel(variable)
     ax.legend(['Remove', 'Keep'])
     
@@ -403,86 +524,104 @@ def pickfig(df, xvar, title):
     
     
     return np.array(df.index[selected_ind])
-def update_errorbar(errobj, x, y, xerr=None, yerr=None):
+
+def display_dataframe_with_option(df):
+
+
     
     """
-    Update the data and error bars of an existing errorbar plot.
+    Display a Tkinter window with a Treeview widget to visualize a DataFrame and prompt a user option.
 
     Parameters:
-    - errobj (tuple): A tuple containing the line, caps, and bars objects of the errorbar plot.
-    - x (array-like): The x-coordinates of the data points.
-    - y (array-like): The y-coordinates of the data points.
-    - xerr (array-like, optional): The error in the x-direction. Default is None.
-    - yerr (array-like, optional): The error in the y-direction. Default is None.
+    - df (pd.DataFrame): The DataFrame to be displayed.
 
-    Raises:
-    - AssertionError: If the errorbar object has an invalid number of dimensions for error bars,
-      or if the required error information is not provided.
+    Returns:
+    - bool or None: The result of the user's choice ('Yes', 'No') or None if the window is closed.
 
-    Notes:
-    - The function updates the data points and error bars of an existing errorbar plot based on the input parameters.
-    - The errorbar object must contain the line, caps, and bars objects, and their structure is expected as follows:
-        - If there are 2 dimensions of error bars, both xerr and yerr must be provided.
-        - If there is 1 dimension of error bars, either xerr or yerr must be provided.
+    This function creates a Tkinter window to visualize the contents of a DataFrame using a Treeview widget.
+    The user is prompted with a question and provided with 'Yes' and 'No' buttons to make a choice.
+    The function returns the user's choice once a button is clicked, or None if the window is closed.
 
     Example:
-    >>> update_errorbar(errorbar_object, x_data, y_data, xerr=error_x, yerr=error_y)
+    import pandas as pd
+
+    # Assuming a DataFrame 'my_dataframe' is defined
+    user_choice = display_dataframe_with_option(my_dataframe)
+    if user_choice is not None:
+        print(f"User chose {'Yes' if user_choice else 'No'}.")
+
     """
     
-    ln, caps, bars = errobj
+    df.reset_index(inplace=True)
+    result = None  # Initialize result variable
+    
+    def yes_clicked():
+        nonlocal result  # Use nonlocal to modify the outer variable
+        result = True
+        root.destroy()
+    
+    def no_clicked():
+        nonlocal result  # Use nonlocal to modify the outer variable
+        result = False
+        root.destroy()
 
+    # Create the main window
+    root = tk.Tk()
+    root.title("DataFrame Viewer")
+    
+    #Keep the window at the front of other apps.
+    root.lift()
+    root.attributes("-topmost", True)
 
-    if len(bars) == 2:
-        assert xerr is not None and yerr is not None, "Your errorbar object has 2 dimension of error bars defined. You must provide xerr and yerr."
-        barsx, barsy = bars  # bars always exist (?)
-        try:  # caps are optional
-            errx_top, errx_bot, erry_top, erry_bot = caps
-        except ValueError:  # in case there is no caps
-            pass
+    # Create a Treeview widget
+    tree = ttk.Treeview(root)
 
-    elif len(bars) == 1:
-        assert (xerr is     None and yerr is not None) or\
-               (xerr is not None and yerr is     None),  \
-               "Your errorbar object has 1 dimension of error bars defined. You must provide xerr or yerr."
+    # Define columns based on DataFrame columns
+    tree['columns'] = list(df.columns)
 
-        if xerr is not None:
-            barsx, = bars  # bars always exist (?)
-            try:
-                errx_top, errx_bot = caps
-            except ValueError:  # in case there is no caps
-                pass
-        else:
-            barsy, = bars  # bars always exist (?)
-            try:
-                erry_top, erry_bot = caps
-            except ValueError:  # in case there is no caps
-                pass
+    # Set column headings
+    for col in df.columns:
+        #Find the width of the columns so that they can be adjusted to fit
+        max_len = max(df[col].astype(str).apply(len).max(), len(col))
+        tree.column(col, width=max_len * 10)  # Adjust the factor (10) as needed for proper sizing
+        tree.heading(col, text=col, command=lambda c=col: sortby(tree, c, 0))
 
-    ln.set_data(x,y)
+    # Create vertical scrollbar
+    vsb = ttk.Scrollbar(root, orient="vertical", command=tree.yview)
+    vsb.pack(side='right', fill='y')
+    tree.configure(yscrollcommand=vsb.set)
 
-    try:
-        errx_top.set_xdata(x + xerr)
-        errx_bot.set_xdata(x - xerr)
-        errx_top.set_ydata(y)
-        errx_bot.set_ydata(y)
-    except NameError:
-        pass
-    try:
-        barsx.set_segments([np.array([[xt, y], [xb, y]]) for xt, xb, y in zip(x + xerr, x - xerr, y)])
-    except NameError:
-        pass
+    # Create horizontal scrollbar
+    hsb = ttk.Scrollbar(root, orient="horizontal", command=tree.xview)
+    hsb.pack(side='bottom', fill='x')
+    tree.configure(xscrollcommand=hsb.set)
 
-    try:
-        erry_top.set_xdata(x)
-        erry_bot.set_xdata(x)
-        erry_top.set_ydata(y + yerr)
-        erry_bot.set_ydata(y - yerr)
-    except NameError:
-        pass
-    try:
-        barsy.set_segments([np.array([[x, yt], [x, yb]]) for x, yt, yb in zip(x, y + yerr, y - yerr)])
-    except NameError:
-        pass
+    # Insert data from DataFrame
+    for index, row in df.iterrows():
+        tree.insert(parent='', index='end', iid=index, text=index, values=list(row))
+
+    # Pack the Treeview widget
+    tree.pack()
+
+    # Create label
+    label = ttk.Label(root, text="Automatically remove P/A outliers?")
+    label.pack(pady=5)
+
+    # Create a frame to contain the buttons
+    button_frame = ttk.Frame(root)
+    button_frame.pack(pady=5)
+    
+    # Create 'Yes' and 'No' buttons
+    yes_button = ttk.Button(button_frame, text='Yes', command=yes_clicked)
+    yes_button.pack(side='left', padx=10)
+    no_button = ttk.Button(button_frame, text='No', command=no_clicked)
+    no_button.pack(side='left', padx=10)
+
+    # Start the tkinter main loop
+    root.mainloop()
+    
+    return result  # Return the result after the window is destroyed
+
 def stndblk_picker(cps_df, sd_df, pa_df, table_df, title, outmod):
     
     
@@ -645,6 +784,7 @@ def stndblk_picker(cps_df, sd_df, pa_df, table_df, title, outmod):
     
     
     return cps_df_modified
+
 def pickfig_cross(dfy, dfx, variables, title=None, fitted=None):
     
     """
@@ -771,6 +911,7 @@ def pickfig_cross(dfy, dfx, variables, title=None, fitted=None):
     
     
     return selected_ind
+
 def blankfigsaver(df1, df2, iso_vars, variable='cps_mean',  title='Blanks CPS',  
                   xvar='time', figpath='.'):
     
@@ -969,6 +1110,7 @@ def blankfigsaver(df1, df2, iso_vars, variable='cps_mean',  title='Blanks CPS',
 
     # Run the Tkinter event loop
     window.mainloop()
+
 def stdfigsaver(df1, df2, title, iso_vars, expected,
                 variables=['cali_single', 'cali_curve'],  
                 errors=['cali_single_se', 'cali_curve_se'],  
@@ -1447,6 +1589,7 @@ def stdfigsaver(df1, df2, title, iso_vars, expected,
     
     # Run the Tkinter event loop
     window.mainloop()
+
 def repeditor(df, pa, title, table_df, id, repnames, repPA_all_df, outmod=1.5):
     
     """
@@ -1705,6 +1848,7 @@ def repeditor(df, pa, title, table_df, id, repnames, repPA_all_df, outmod=1.5):
     
     
     return df2
+
 def ratioel_rep_removal(df, repnames, ratioels, isotopes, Gasmodes):
     
     """
@@ -1750,99 +1894,36 @@ def ratioel_rep_removal(df, repnames, ratioels, isotopes, Gasmodes):
             df.loc[idx, repnames]= np.where(out_array, np.nan, df.loc[idx, repnames])
     
     return df
-def display_dataframe_with_option(df):
 
-
+def setup_progress_bar(text=''):
     
-    """
-    Display a Tkinter window with a Treeview widget to visualize a DataFrame and prompt a user option.
+    #set up the progressbar
+    root=tk.Tk()
+    progressbar = ttk.Progressbar(root, orient=tk.HORIZONTAL, length=400)
+    root.title('Progress')
 
-    Parameters:
-    - df (pd.DataFrame): The DataFrame to be displayed.
-
-    Returns:
-    - bool or None: The result of the user's choice ('Yes', 'No') or None if the window is closed.
-
-    This function creates a Tkinter window to visualize the contents of a DataFrame using a Treeview widget.
-    The user is prompted with a question and provided with 'Yes' and 'No' buttons to make a choice.
-    The function returns the user's choice once a button is clicked, or None if the window is closed.
-
-    Example:
-    import pandas as pd
-
-    # Assuming a DataFrame 'my_dataframe' is defined
-    user_choice = display_dataframe_with_option(my_dataframe)
-    if user_choice is not None:
-        print(f"User chose {'Yes' if user_choice else 'No'}.")
-
-    """
-    
-    df.reset_index(inplace=True)
-    result = None  # Initialize result variable
-    
-    def yes_clicked():
-        nonlocal result  # Use nonlocal to modify the outer variable
-        result = True
-        root.destroy()
-    
-    def no_clicked():
-        nonlocal result  # Use nonlocal to modify the outer variable
-        result = False
-        root.destroy()
-
-    # Create the main window
-    root = tk.Tk()
-    root.title("DataFrame Viewer")
-    
     #Keep the window at the front of other apps.
     root.lift()
     root.attributes("-topmost", True)
 
-    # Create a Treeview widget
-    tree = ttk.Treeview(root)
+    w = 300 # width for the Tk root
+    h = 100 # height for the Tk root
 
-    # Define columns based on DataFrame columns
-    tree['columns'] = list(df.columns)
+    # get screen width and height
+    ws = root.winfo_screenwidth() # width of the screen
+    hs = root.winfo_screenheight() # height of the screen
 
-    # Set column headings
-    for col in df.columns:
-        #Find the width of the columns so that they can be adjusted to fit
-        max_len = max(df[col].astype(str).apply(len).max(), len(col))
-        tree.column(col, width=max_len * 10)  # Adjust the factor (10) as needed for proper sizing
-        tree.heading(col, text=col, command=lambda c=col: sortby(tree, c, 0))
+    # calculate x and y coordinates for the Tk root window
+    x = (ws/2) - (w/2)
+    y = (hs/2) - (h/2)
 
-    # Create vertical scrollbar
-    vsb = ttk.Scrollbar(root, orient="vertical", command=tree.yview)
-    vsb.pack(side='right', fill='y')
-    tree.configure(yscrollcommand=vsb.set)
+    # set the dimensions of the screen 
+    # and where it is placed
+    root.geometry('%dx%d+%d+%d' % (w, h, x, y))
 
-    # Create horizontal scrollbar
-    hsb = ttk.Scrollbar(root, orient="horizontal", command=tree.xview)
-    hsb.pack(side='bottom', fill='x')
-    tree.configure(xscrollcommand=hsb.set)
-
-    # Insert data from DataFrame
-    for index, row in df.iterrows():
-        tree.insert(parent='', index='end', iid=index, text=index, values=list(row))
-
-    # Pack the Treeview widget
-    tree.pack()
-
-    # Create label
-    label = ttk.Label(root, text="Automatically remove P/A outliers?")
-    label.pack(pady=5)
-
-    # Create a frame to contain the buttons
-    button_frame = ttk.Frame(root)
-    button_frame.pack(pady=5)
-    
-    # Create 'Yes' and 'No' buttons
-    yes_button = ttk.Button(button_frame, text='Yes', command=yes_clicked)
-    yes_button.pack(side='left', padx=10)
-    no_button = ttk.Button(button_frame, text='No', command=no_clicked)
-    no_button.pack(side='left', padx=10)
-
-    # Start the tkinter main loop
-    root.mainloop()
-    
-    return result  # Return the result after the window is destroyed
+    l = tk.Label(root, text = text)
+    l.pack(side=tk.TOP)
+    progressbar.pack(side=tk.BOTTOM)
+    progressbar['value']=0  
+    progressbar.update()
+    return root, progressbar
