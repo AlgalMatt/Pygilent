@@ -7,7 +7,7 @@ from Pygilent.stnds import get_default_stndvals, make_stndvals_df
 
 ##Functions
 
-def find_substrings(array1, string1, ret_array=True, case_sensitive=False):
+def find_substrings(array1, string1, ret_array=True, case=False):
     """
     Looks for occurrences of substring(s) within an array of strings, returning
     a boolean array. Works similarly to the Pandas str.contains method but can 
@@ -46,7 +46,7 @@ def find_substrings(array1, string1, ret_array=True, case_sensitive=False):
     #if argument string1 is a single string
     if type(string1)==str:
         #lower all cases
-        if case_sensitive==False:
+        if case==False:
             array1=nlower(array1)
             string1=string1.lower()
         for i in array1:
@@ -54,7 +54,7 @@ def find_substrings(array1, string1, ret_array=True, case_sensitive=False):
     #if string1 is a list of strings             
     else:
         #lower all cases
-        if case_sensitive==False:
+        if case==False:
             array1=nlower(array1)
             string1=nlower(string1)
         retarray=np.full((len(array1), len(string1)), False)
@@ -99,20 +99,23 @@ def find_outliers(array1, mod=1.5):
         
     return outs
 
-def deconstruct_isotope_gas(string, output='all'):
+def deconstruct_isotope_gas(input, output='all'):
     
-    str_series=pd.Series(string)
+    str_series=pd.Series(input)
     
     mass=str_series.str.extract(r'(\d+)').values.flatten()
     element=str_series.str.extract(r'([A-Z][a-z]*)').values.flatten()
+    gas_mode=str_series.str.split('_').str[-1].values
+    if type(input) is str:
+        mass=mass[0]
+        element=element[0]
+        gas_mode=gas_mode[0]
+        
+        
     
     #join the mass and element arrays to make isotope
     isotope=mass+element
     
-    #extract only the text after the last underscore in the series of strings
-    gas_mode=np.array([])
-    for s in str_series:
-        gas_mode=np.append(gas_mode, s.split('_')[-1])
 
     if output=='all':
         return mass, element, gas_mode
@@ -132,6 +135,70 @@ def unarchive_replicates(rep_list):
     rep_df=rep_df.droplevel(0, axis=1)
     rep_df.rename(columns={i: i+1 for i in rep_df.columns}, inplace=True)
     return rep_df
+
+def extract_float_substring(input_string):
+    # Regular expression to match a substring that can be converted to a float
+    float_pattern = re.compile(r'[-+]?\d*\.\d+|\d+')
+
+    # Search for the pattern in the input string
+    match = float_pattern.search(input_string)
+
+    if match:
+        # Extract the matched substring
+        float_substring = match.group()
+        return float_substring
+    else:
+        # Return an empty string if no match is found
+        return ""
+
+def create_entry_window(string_list, default_values):
+    # Create the main Tkinter window
+    root = tk.Tk()
+    root.title("User Input Window")
+
+    # Dictionary to store user inputs
+    user_inputs = {}
+
+    # Function to handle 'OK' button click
+    def ok_button_click():
+        for idx, string in enumerate(string_list):
+            user_input = entry_fields[idx].get()
+            try:
+                float_value = float(user_input)
+                user_inputs[string] = float_value
+            except ValueError:
+                show_error_message("Error", "Please enter a valid number for '{}'.".format(string))
+                return
+            
+        root.destroy()
+        
+    def show_error_message(title, message):
+        tk.messagebox.showerror(title, message)
+    
+    #title
+    instructions_label = tk.Label(root, text="Enter conc scalings")
+    instructions_label.grid(row=0, column=0, columnspan=2, pady=5)
+        
+    # Create labels and entry fields with default values
+    entry_fields = []
+    for idx, string in enumerate(string_list):
+        label = tk.Label(root, text=string)
+        label.grid(row=idx + 1, column=0, padx=10, pady=5, sticky="w")
+        default_value = default_values[idx] if default_values and idx < len(default_values) else ""
+        entry = tk.Entry(root)
+        entry.insert(0, default_value)
+        entry.grid(row=idx + 1, column=1, padx=10, pady=5, sticky="e")
+        entry_fields.append(entry)
+
+    # Create 'OK' button
+    ok_button = tk.Button(root, text="OK", command=ok_button_click)
+    ok_button.grid(row=len(string_list) + 1, column=0, columnspan=2, pady=10)
+
+    # Run the Tkinter main loop
+    root.mainloop()
+
+    return user_inputs
+
 
 
 def pivot_isotopes(df, var, index=['run_order', 'sample_name']):
@@ -586,14 +653,102 @@ class Batch:
         self.batch_info.loc[self.brkt_order, 'sample_type']=sample_type
     
     
-    def identify_cali_stnds(self, cali_run_order=np.array([], dtype=int), cali_dict={}, 
-                            how='manual', keyword='cali', case=False):
+    def identify_cali_stnds(self, stnd_vals_df, cali_run_order=np.array([], dtype=int), cali_order={}, 
+                            how='manual', keyword=None, cali_stnd_df=None):
         if how not in ['auto', 'manual', 'ui']:
             raise ValueError('Invalid method. Please select from: auto, manual, ui.')
         
-        pass
-    
+        if self.cali_mode is None:
+            raise ValueError('Calibration mode not set. Please set calibration mode.')
         
+        
+        
+        if how =='ui':
+            from Pygilent.uitools import fancycheckbox, fancycheckbox_2window
+        
+        from pandas.api.types import is_numeric_dtype
+        stnd_vals_names = np.array([cols for cols in stnd_vals_df.columns if is_numeric_dtype(stnd_vals_df[cols])])
+        
+        
+
+        if how == 'manual':
+            self.cali_order=cali_order
+            self.cali_stnd_df=cali_stnd_df
+            
+        
+        elif 'single' in self.cali_mode:
+            cali_run_order=self.brkt_order
+            #find the suggested values
+            bracket_names=pd.unique(self.batch_info.loc[cali_run_order, 'sample_name'])
+            associate_defaults={stnd_name: find_substrings(bracket_names, str(stnd_name), case=False) for stnd_name in stnd_vals_names}
+            if how=='ui':
+                bracket_dict=fancycheckbox_2window(bracket_names, stnd_vals_names, 
+                                                   associate_defaults, 'Associate bracket standards with standards list')
+            else:
+                bracket_dict=associate_defaults
+            
+            cali_order={}
+            for k, v in bracket_dict.items():
+                if np.any(v):
+                    name=bracket_names[v]
+                    idx=np.isin(self.batch_info.loc[cali_run_order, 'sample_name'] , name)
+                    self.cali_order[k]=cali_run_order[idx]
+            #make cali_stnd_df
+            self.cali_stnd_df=make_stndvals_df(stnd_vals_df, list(self.cali_order.keys()), 
+                                               self.analytes['isotope_gas'].values)
+        elif self.cali_mode == 'ratio curve':
+            if how =='auto' & keyword is None:
+                raise ValueError('Keyword required for auto method.')
+            if keyword is not None:
+                associate_defaults={stnd_name: find_substrings(self.batch_info['sample_name'], str(stnd_name), case=False) for stnd_name in keyword}
+            else:
+                associate_defaults=None
+            if how=='ui':
+                cali_dict=fancycheckbox_2window(self.batch_info['sample_name'], stnd_vals_names, 
+                                                associate_defaults, 'Associate calibration standards with standards list')
+            else:
+                cali_dict=associate_defaults
+            cali_order={k: self.batch_info.loc[v, 'run_order'] for k, v in cali_dict.items() if np.any(v)}
+            self.cali_stnd_df=make_stndvals_df(stnd_vals_df, list(self.cali_order.keys()), self.analytes['isotope_gas'].values)
+        
+        elif self.cali_mode == 'conc curve': 
+            if how =='auto' & keyword is None:
+                raise ValueError('Keyword required for auto method.')
+            if keyword is not None:
+                if type(keyword) is not str:
+                    raise ValueError('Keyword must be a single standard name for conc curve mode.')
+                associate_defaults={keyword: self.batch_info['sample_name'].str.contains(keyword, case=False)}
+            else:
+                associate_defaults=None
+            if how=='ui':
+                cali_dict=fancycheckbox_2window(self.batch_info['sample_name'], stnd_vals_names, associate_defaults,
+                                                'Associate calibration standards with standards list', single=True)
+            else:
+                cali_dict=associate_defaults
+            
+            stnd_name=list(cali_dict.keys())[0]
+            cali_rows=self.batch_info.loc[cali_dict[stnd_name], 'run_order'].values
+            
+
+            unique_stnd_names=pd.unique(self.batch_info.loc[cali_dict[stnd_name], 'sample_name'])
+
+            stnd_conc_defaults=[extract_float_substring(s) for s in unique_stnd_names]
+
+            if how == 'ui':
+                stnd_conc_dict = create_entry_window(list(unique_stnd_names), 
+                                                     default_values=stnd_conc_defaults)
+            else:
+                stnd_conc_dict=dict(zip(unique_stnd_names, np.array(stnd_conc_defaults).astype(float)))
+
+            cali_order={val:[] for val in stnd_conc_dict.values()}
+
+            for key, val in stnd_conc_dict.items():
+                key_rows=cali_rows[self.batch_info.loc[cali_rows, 'sample_name']==key]
+                cali_order[val].extend(list(key_rows))
+            self.cali_stnd_df=make_stndvals_df(stnd_vals_df, [stnd_name], self.analytes['isotope_gas'].values)
+
+            
+                
     def initialize(self):
         #check if the batch has correct attributes to proceed
         if type(self.cps_mean) is not pd.core.frame.DataFrame and type(self.rep_cps) is not pd.core.frame.DataFrame:
