@@ -627,7 +627,7 @@ class Batch:
         self.stnd_df=stnd_df
     
     
-    def set_blks(self, blk_order=np.array([], dtype=int), how='auto', keyword='blk', case=False):
+    def set_blk_order(self, blk_order=np.array([], dtype=int), how='auto', keyword='blk', case=False):
         
         if how not in ['auto', 'manual', 'ui']:
             raise ValueError('Invalid method. Please select from: auto, manual, ui.')
@@ -646,7 +646,7 @@ class Batch:
         self.batch_info.loc[self.blk_order, 'sample_type']='blank'
 
 
-    def set_brkt_stnds(self, brkt_order=np.array([], dtype=int), how='manual', keyword=None, case=False):
+    def set_brkt_order(self, brkt_order=np.array([], dtype=int), how='manual', keyword=None, case=False):
         if how not in ['auto', 'manual', 'ui']:
             raise ValueError('Invalid method. Please select from: auto, manual, ui.')
 
@@ -672,12 +672,14 @@ class Batch:
     
         if how =='ui':
             from Pygilent.uitools import fancycheckbox_2window
-            items_1=pd.unique(self.analytes['gas_mode'])
-            items_2=pd.unique(self.analytes['isotope_gas'])
-            ratio_isos=fancycheckbox_2window(items_1, items_2, 
-                                             title_1='Select gas mode', 
-                                             title_2='Select ratio isotope', 
-                                             single_1=True, single_2=True)
+            gas_modes=pd.unique(self.analytes['gas_mode'])
+            isotopes=pd.unique(self.analytes['isotope_gas'])
+            ratio_isos_bool=fancycheckbox_2window(isotopes, gas_modes, 
+                                             title_1='Select ratio isotope', 
+                                             title_2='Select gas mode', 
+                                             single_1=True)
+            ratio_isos={k: isotopes[v][0] for k, v in ratio_isos_bool.items()}
+            
         
         
         for key, val in ratio_isos.items():
@@ -756,7 +758,7 @@ class Batch:
                                                units=units)
                 
         elif self.cali_mode == 'ratio curve':
-            if how =='auto' & keyword is None:
+            if how =='auto' and keyword is None:
                 raise ValueError('Keyword required for auto method.')
             if keyword is not None:
                 associate_defaults={stnd_name: find_substrings(self.batch_info['sample_name'], str(stnd_name), case=False) for stnd_name in keyword}
@@ -819,6 +821,13 @@ class Batch:
         
         for key, val in self.cali_order.items():
             self.batch_info.loc[val, 'calibrant']=key
+        
+        #if using a cali curve, warn if unequal number of standards
+        if 'curve' in self.cali_mode:
+            lengths=np.array([len(v) for v in self.cali_order.values()])
+            #check if all lengths are the same
+            if not np.all(lengths==lengths[0]):
+                warnings.warn('It is advisable to have the same number of each standard in the calibration.')
 
             
                 
@@ -850,8 +859,26 @@ class Batch:
     
     def process(self):
         #fully process the batch using the calibration mode specified
-        pass
-    
+        
+        
+        rep_cps_pivot=self.rep_df.pivot(index=['run_order', 'replicate'], columns='isotope_gas', values='cps')
+        isotopes_by_gasmode_dict={gas_mode: self.analytes.loc[self.analytes['gas_mode']==gas_mode, 'isotope_gas'].values for gas_mode in pd.unique(self.analytes['gas_mode'])}
+        
+        if 'ratio' in self.cali_mode:
+            
+            y_df=self.cps_mean.copy() #mean Ca cps
+            s_y_df=self.cps_mean.copy() #sd Ca
+            repCPS_y_df=self.cps_mean.copy() #replicate Ca cps
+            #CPC_y_df=self.cps_mean.copy() #for theoretical errors (Ca counts per cycle)
+            
+            
+            for gas in list(self.ratio_iso.keys()):
+                gas_isos=isotopes_by_gasmode_dict['No Gas']
+                y_df.loc[:, gas_isos]=np.tile(self.cps_mean[self.ratio_iso[gas]].values, (len(gas_isos), 1)).T
+                s_y_df.loc[:, gas_isos]=np.tile(self.cps_sd[self.ratio_iso[gas]].values, (len(gas_isos), 1)).T
+                
+                
+                denominator_cps=self.cps_mean.loc[self.cali_order[self.ratio_iso['P']], 'cps']
     
 
     

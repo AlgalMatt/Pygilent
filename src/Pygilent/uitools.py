@@ -153,7 +153,7 @@ def fancycheckbox(items,  title="", defaults=None, single=False):
 
 
 def fancycheckbox_2window(items_1, items_2,  title_1="", title_2="", 
-                          defaults=None, single_1=False, single_2=False):
+                          defaults=None, single_1=False, single_2=False, unique=True):
     """    
     Creates a pop-up simple checkbox from a list of items. Returns indexes of 
     the checked items.
@@ -222,7 +222,7 @@ def fancycheckbox_2window(items_1, items_2,  title_1="", title_2="",
             for i in range(len(cb_vars_1)):
                 if i != var:
                     cb_vars_1[i].set(False)
-                    cb_vars_1[i]['bg']='white'
+                    cb_list_1[i]['bg']='white'
         
         item_2_selected=np.array(items_2)[selected_2][0]
         selected_1[item_2_selected] = [cb_vars_1[i].get() for i in range(len(cb_vars_1))]
@@ -231,14 +231,15 @@ def fancycheckbox_2window(items_1, items_2,  title_1="", title_2="",
         else:
             cb_list_1[var]['bg']='white'
         
-        #make sure only one item 2 is associated with each item 1
-        for key, value in selected_1.items():
-            if item_2_selected!=key:
-                idx=np.array(selected_1[item_2_selected]) & np.array(value)
-                array=np.array(selected_1[key])
-                array[idx]=False
-                selected_1[key]=list(array)
-        
+        if unique:
+            #make sure only one item 2 is associated with each item 1
+            for key, value in selected_1.items():
+                if item_2_selected!=key:
+                    idx=np.array(selected_1[item_2_selected]) & np.array(value)
+                    array=np.array(selected_1[key])
+                    array[idx]=False
+                    selected_1[key]=list(array)
+            
         #if single_2 is True, only one item 2 can be selected
         if single_2:
             for key, value in selected_1.items():
@@ -261,6 +262,10 @@ def fancycheckbox_2window(items_1, items_2,  title_1="", title_2="",
         item_2_selected=np.array(items_2)[selected_2][0]
         
         for i, booleon in enumerate(selected_1[item_2_selected]):
+            if booleon:
+                booleon=True
+            else:
+                booleon=False
             cb_vars_1[i].set(booleon)
             if booleon:
                 cb_list_1[i]['bg']='yellow'

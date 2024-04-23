@@ -7,9 +7,6 @@ import numpy as np
 stndvals=pyg.stnds.get_default_stndvals()
 
 isotopes=['Li7_No Gas', 'B11_No Gas', 'Mg24_No Gas', 'Al27_No Gas']
-a=pyg.stnds.make_stndvals_df(stndvals, ['STGFrm', 'STGCco'], isotopes)
-
-
 
 
 
@@ -41,15 +38,10 @@ new_batch=pyg.pygilent.import_batch(new_batch_path)
 
 
 new_batch.set_blk_order(how='auto')
-new_batch.check_blks()
+#new_batch.check_blks()
 new_batch.set_brkt_order(how='auto', keyword='stgfrm')
+new_batch.cali_mode='ratio curve'
+new_batch.set_ratio_iso(how='ui')
 
+new_batch.set_cali_stnds(stndvals, how='ui')
 
-
-
-stnd_vals_df=pyg.stnds.get_default_stndvals()
-
-stnd_vals_df.dtypes
-
-from pandas.api.types import is_numeric_dtype
-col_list = [cols for cols in stnd_vals_df.columns if is_numeric_dtype(stnd_vals_df[cols])]
