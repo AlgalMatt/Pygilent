@@ -49,39 +49,39 @@ def make_stndvals_df(df, stnd_names, isotopes, cali_mode, dilutions=np.array([])
         
         elements=deconstruct_isotope_gas(isotopes, 'element')
         col_names=np.char.add(dilutions.astype(str), '_'+stnd_names[0])
-        new_df=pd.DataFrame([], columns=col_names, index=isotopes)
+        stnd_vals_df=pd.DataFrame([], columns=col_names, index=isotopes)
         vals_arr=df.loc[elements, stnd_names].values
-        new_df[col_names]=dilutions*vals_arr
-        new_df.insert(0, 'units', units_array)
+        stnd_vals_df.loc[:, col_names]=dilutions*vals_arr
+        stnd_vals_df.insert(0, 'units', units_array)
         
     else:
         if ratio_element is None:
             raise ValueError(f'Ratio element must be provided for {cali_mode}.')
 
-        
         ratio_el_arr=df.loc[ratio_element, stnd_names].values
-        new_df=df.loc[deconstruct_isotope_gas(isotopes, 'element'), stnd_names]
-        new_df=new_df/ratio_el_arr
+        stnd_vals_df=df.loc[deconstruct_isotope_gas(isotopes, 'element'), stnd_names]
+        stnd_vals_df=stnd_vals_df/ratio_el_arr
         ratio_el_unit=df.loc[ratio_element, 'units']
+        units_array=np.array([convert_units_to_ratio(u, denominator_unit=ratio_el_unit)  for u in units_array]).astype('object')
+        stnd_vals_df.insert(0, 'units', units_array+' '+ratio_element)  
         
-        new_df.insert(0, 'units', units_array+' '+ratio_element)  
-        new_df['units']=new_df['units'].apply(convert_units_to_ratio, denominator_unit=ratio_el_unit)
     
         
-    new_df.set_index(pd.Index(isotopes), inplace=True)
+    stnd_vals_df.set_index(pd.Index(isotopes), inplace=True)
 
     
     if units=='moles':
         masses=np.array(get_atomic_mass(deconstruct_isotope_gas(isotopes, 'element'), out_type=float))
-        new_df.iloc[:,1:]=new_df.iloc[:,1:]/masses[:, None]
+        stnd_vals_df.iloc[:,1:]=stnd_vals_df.iloc[:,1:]/masses[:, None]
         #replace 'g' with 'mol'
-        new_df['units']=(pd.Series(units_array).str.replace('g', 'mol')).values
+        stnd_vals_df['units']=(pd.Series(units_array).str.replace('g', 'mol')).values
+        
         if 'ratio' in cali_mode:
             ratio_el_mass=get_atomic_mass(ratio_element, out_type=float)
-            new_df.loc[:,stnd_names]=new_df.loc[:,stnd_names]*ratio_el_mass
-            new_df['units']=new_df['units']+' '+ratio_element
+            stnd_vals_df.loc[:,stnd_names]=stnd_vals_df.loc[:,stnd_names]*ratio_el_mass
+            stnd_vals_df['units']=stnd_vals_df['units']+' '+ratio_element
         
-    return new_df
+    return stnd_vals_df
 
 
 
@@ -90,6 +90,19 @@ magnitude_sym_to_fact_dict=dict(zip(magnitude_sequence, [Decimal('1E'+str(x)) fo
 magnitude_fact_to_sym_dict={v: k for k, v in magnitude_sym_to_fact_dict.items()}
 
 
+
+def convert_units_to_conc(unit, target_unit='grams'):
+    if target_unit not in ['moles', 'grams']:
+        raise ValueError('Invalid units. Please select from: moles or grams.')
+
+    split_unit=unit.split('/')
+    
+    if target_unit=='grams':
+        split_unit[0]=split_unit[0].replace('mol', 'g')
+    
+    split_unit[1]='L'
+
+    
 
 def convert_units_to_ratio(numerator_unit, denominator_unit):
     numerator_mag_sym=numerator_unit[0]
