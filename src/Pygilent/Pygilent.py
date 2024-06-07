@@ -712,10 +712,10 @@ class Batch:
         self.cali_stnd_df=cali_stnd_df
         self.curve_mdl=curve_mdl
         if not np.all(np.isin(blk_order, self.batch_info['run_order'].values)):
-            raise ValueError(f'Invalid bracket order. Must be from array of run orders: ({self.batch_info['run_order'].values.min()} - {self.batch_info['run_order'].values.max()}).')
+            raise ValueError('Invalid bracket order. Must be from array of run orders')
         self.blk_order=np.array(blk_order, dtype=int)
         if not np.all(np.isin(brkt_order, self.batch_info['run_order'].values)):
-            raise ValueError(f'Invalid bracket order. Must be from array of run orders: ({self.batch_info['run_order'].values.min()} - {self.batch_info['run_order'].values.max()}).')
+            raise ValueError(f'Invalid bracket order. Must be from array of run orders.')
         self.brkt_order=np.array(brkt_order, dtype=int)
 
         self.__process_inputs__=__process_inputs__
@@ -1295,6 +1295,10 @@ class Batch:
             import statsmodels.api as sm
             
             for iso in self.cali_stnd_df.index:
+                
+                if iso in [ratio_iso for ratio_iso in self.ratio_iso.values()]:
+                    continue
+                
                 X=np.array([])
                 X_se=np.array([])
                 y=np.array([])
@@ -1324,7 +1328,6 @@ class Batch:
                 X=sm.add_constant(X)
                 lm_fit = sm.OLS(y, X).fit()
                 
-                self.curve_mdl[iso]=lm_fit
                 
                 curve_mdl_df.loc[iso, 'fit']=lm_fit
                 curve_mdl_df.loc[iso, 'R2']=lm_fit.rsquared

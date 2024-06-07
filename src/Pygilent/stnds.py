@@ -91,18 +91,6 @@ magnitude_fact_to_sym_dict={v: k for k, v in magnitude_sym_to_fact_dict.items()}
 
 
 
-def convert_units_to_conc(unit, target_unit='grams'):
-    if target_unit not in ['moles', 'grams']:
-        raise ValueError('Invalid units. Please select from: moles or grams.')
-
-    split_unit=unit.split('/')
-    
-    if target_unit=='grams':
-        split_unit[0]=split_unit[0].replace('mol', 'g')
-    
-    split_unit[1]='L'
-
-    
 
 def convert_units_to_ratio(numerator_unit, denominator_unit):
     numerator_mag_sym=numerator_unit[0]
