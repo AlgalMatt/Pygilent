@@ -44,7 +44,6 @@ new_batch.cali_mode='ratio curve'
 new_batch.set_ratio_iso(how='auto', keyword='Ca48')
 new_batch.set_cali_stnds(stndvals, how='ui')
 
-new_batch.blank_subtraction()
 new_batch.initialise()
 
 

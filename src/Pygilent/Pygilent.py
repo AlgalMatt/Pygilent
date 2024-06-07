@@ -624,7 +624,7 @@ s_x_sym, s_y_sym, s_xb1_sym, s_xb2_sym, s_yb1_sym, s_yb2_sym, s_xs1_sym, \
 
 blkcorr_x_sym=(x_sym - Dtb_sym*xb2_sym + xb1_sym*(Dtb_sym - 1))
 
-calculate_blkcorr=sym.lambdify((x_sym, xb2_sym, xb1_sym, Dtb_sym), blkcorr_x_sym)
+calc_blkcorr=sym.lambdify((x_sym, xb2_sym, xb1_sym, Dtb_sym), blkcorr_x_sym)
 
 blkcorr_x_var_sym=(s_x_sym**2*blkcorr_x_sym.diff(x_sym)**2+s_xb1_sym**2*blkcorr_x_sym.diff(xb1_sym)**2
                    +s_xb2_sym**2*blkcorr_x_sym.diff(xb2_sym)**2)
@@ -694,7 +694,7 @@ class Batch:
                  calibrated=None, calibrated_se=None, cov=None, 
                  cali_stnd_df=None, curve_mdl=None, blk_order=np.array([], dtype=int), brkt_order=np.array([], dtype=int), 
                  brkt_stnd=None, cali_mode=None, ratio_iso=None, 
-                 cali_order={}, stnd_df=None):
+                 cali_order={}, stnd_df=None, __process_inputs__=None):
         self.run_name=run_name
         self.batch_info=batch_info
         self.total_reps=total_reps
@@ -718,6 +718,7 @@ class Batch:
             raise ValueError(f'Invalid bracket order. Must be from array of run orders: ({self.batch_info['run_order'].values.min()} - {self.batch_info['run_order'].values.max()}).')
         self.brkt_order=np.array(brkt_order, dtype=int)
 
+        self.__process_inputs__=__process_inputs__
         
         self.brkt_stnd=brkt_stnd
         
@@ -1032,86 +1033,14 @@ class Batch:
             cov_df.loc[runorder, :]=cov_array
         self.cov=cov_df
     
-    def blank_correction(self):
-        
-        if self.blk_order is None:
-            raise ValueError('No blank positions provided. Blanks cannot be removed.')
-        
-        processing_df=pd.DataFrame([], columns=['blk1', 'blk2', 'brkt1', 'brkt2'])            
-        nan_df=self.cps_mean.copy()
-        nan_df.loc[:, self.analytes['isotope_gas']]=np.nan
-        self.blk_corrected=nan_df
-        self.blk_corrected_se=nan_df
-        
-        #cycle through sample-by-sample
-        for samp_pos in self.batch_info['run_order']:
-            
-            
-            #skip blanks
-            if samp_pos in self.blk_order:
-                continue
-                
-                #find bracketing blanks  
-
-            blk1, blk2=find_brackets(samp_pos, self.blk_order)
-            processing_df.loc[samp_pos, 'blk1']=blk1
-            processing_df.loc[samp_pos, 'blk2']=blk2
-            
-            if blk1 == blk2:
-                Dtb=0
-            else:
-                Dtb=(self.batch_info.loc[samp_pos, 'session_time']-self.batch_info.loc[samp_pos, 'session_time'])/(
-                    self.batch_info.loc[blk2, 'session_time']-self.batch_info.loc[blk1, 'session_time'])
-                processing_df.loc[samp_pos, 'sample_blk_time']=Dtb
-            
-            
-            isotopes=pd.unique(self.analytes['isotope_gas'])
-            x=self.cps_mean.loc[samp_pos, isotopes].values
-            xb1=self.cps_mean.loc[blk1, isotopes].values 
-            xb2=self.cps_mean.loc[blk2, isotopes].values 
-
-            s_x=self.cps_sd.loc[samp_pos, isotopes].values 
-            s_xb1=self.cps_sd.loc[blk1, isotopes].values 
-            s_xb2=self.cps_sd.loc[blk2, isotopes].values 
-
-            x_n=self.rep_numbers_df.loc[samp_pos, isotopes].values
-            xb1_n=self.rep_numbers_df.loc[blk1, isotopes].values
-            xb2_n=self.rep_numbers_df.loc[blk2, isotopes].values
-            
-            s_x=sd_to_se(s_x, x_n)
-            s_xb1=sd_to_se(s_xb1, xb1_n)
-            s_xb2=sd_to_se(s_xb2, xb2_n)
-            
-            #Calculate bracketed ratios and errors
-            blkcorr=calculate_blkcorr(x, xb2, xb1, Dtb)
-            blkcorr_se=calc_blkcorr_variance(x, xb2, xb1, Dtb, s_x, s_xb1, s_xb2)**0.5
-            
-            #store results
-            self.blk_corrected.loc[samp_pos, isotopes]=blkcorr
-            self.blk_corrected_se.loc[samp_pos, isotopes]=blkcorr_se
-
     
-    def ratio_correction(self, x_df, x_se_df):
-        if self.ratio_iso is None:
-            raise ValueError('Ratio isotopes not set. Please set ratio isotopes.')
-        
-        rep_cps_pivot=self.rep_df.pivot(index=['run_order', 'replicate'], columns='isotope_gas', values='cps')
-        
-        y_df=self.cps_mean.copy() #mean denominator cps
-        s_y_df=self.cps_sd.copy() #denominator sd  
-        repCPS_y_df=rep_cps_pivot.copy() #replicate denominator cps
-        
-    
-    def bracket_correction(self, x_df, x_se_df):
-        pass
-    
-    def initialise(self, ignore_detmode=False):
+    def initialise(self):
         #fully process the batch using the calibration mode specified
         
         
         rep_cps_pivot=self.rep_df.pivot(index=['run_order', 'replicate'], columns='isotope_gas', values='cps')
-        rep_pa_pivot=self.rep_df.pivot(index=['run_order', 'replicate'], columns='isotope_gas', values='det_mode')
-        gasmode_isotope_dict={gas_mode: self.analytes.loc[self.analytes['gas_mode']==gas_mode, 'isotope_gas'].values for gas_mode in pd.unique(self.analytes['gas_mode'])}
+        #rep_pa_pivot=self.rep_df.pivot(index=['run_order', 'replicate'], columns='isotope_gas', values='det_mode')
+        #gasmode_isotope_dict={gas_mode: self.analytes.loc[self.analytes['gas_mode']==gas_mode, 'isotope_gas'].values for gas_mode in pd.unique(self.analytes['gas_mode'])}
     
         
         #if ratio mode
@@ -1122,7 +1051,18 @@ class Batch:
             repCPS_y_df=rep_cps_pivot.copy() #replicate denominator cps
             #CPC_y_df=self.cps_mean.copy() #for theoretical errors (denominator counts per cycle)
 
-            processing_df=pd.DataFrame([], columns=['blk1', 'blk2', 'brkt1', 'brkt2'])            
+            processing_df=pd.DataFrame([], columns=['blk1_pos', 'blk2_pos', 'brkt1_pos', 'brkt2_pos'])            
+            
+            process_inputs_df=pd.DataFrame([], columns=['run_order', 'isotope_gas', 'x', 'xb1', 'xb2', 'y', 'yb1', 'yb2', 'Dtb', 
+                                                        'xs1', 'xs2', 'ys1', 'ys2',
+                                                        'Dts1b', 'Dts2b', 'Dts',
+                                                        's_x', 's_y', 's_xb1', 's_xb2', 's_yb1', 's_yb2', 's_xs1', 's_xs2', 's_ys1', 's_ys2', 
+                                                        'cov_xy', 'cov_xs1ys1', 'cov_xs2ys2', 'cov_xb1yb1', 'cov_xb2yb2'])
+            
+            process_inputs_df['isotope_gas']=list(self.analytes['isotope_gas'])*len(self.batch_info)
+            
+            process_inputs_df['run_order']=np.repeat(self.batch_info['run_order'].values, len(self.analytes['isotope_gas']))
+            
             for iso in self.analytes['isotope_gas']:
                 gas=deconstruct_isotope_gas(iso, 'gas_mode')
                 ratio_iso_gasmode=self.ratio_iso[gas]
@@ -1132,23 +1072,15 @@ class Batch:
                 
             self.set_covariances()
             
-            #initialise dataframes
-            nan_df=self.cps_mean.copy()
-            nan_df.loc[:, self.analytes['isotope_gas']]=np.nan
-            self.blk_corrected=nan_df
-            self.blk_corrected_se=nan_df
-            self.cps_ratio=nan_df
-            self.cps_ratio_se=nan_df
-            self.bracketed=nan_df
-            self.bracketed_se=nan_df
-            
             #cycle through sample-by-sample
             for samp_pos in self.batch_info['run_order']:
                 
                 #skip blanks
                 if samp_pos in self.blk_order:
                     continue
-                  
+                
+                df_idx=process_inputs_df['run_order']==samp_pos
+                
                 #find bracketing blanks  
                 if self.blk_order is not None:
                     blk1, blk2=find_brackets(samp_pos, self.blk_order)
@@ -1197,8 +1129,7 @@ class Batch:
                         self.batch_info.loc[brkt2, 'session_time']-self.batch_info.loc[brkt1, 'session_time'])
                     processing_df.loc[samp_pos, 'sample_stnd_bracket_time']=Dts
                 
-               
-               
+
                 #Assign components of processing
                 
                 #Assign numerator and denominator
@@ -1257,41 +1188,104 @@ class Batch:
                 cov_xb2yb2=self.cov.loc[blk2, isotopes].values
                 cov_xs1ys1=self.cov.loc[brkt1, isotopes].values
                 cov_xs2ys2=self.cov.loc[brkt2, isotopes].values 
+                
+                process_inputs_df.loc[df_idx, ['x', 'xb1', 'xb2', 'y', 'yb1', 'yb2', 'xs1', 'ys1', 'xs2', 'ys2', 
+                                                    's_x', 's_y', 's_xb1', 's_xb2', 's_yb1', 's_yb2', 's_xs1', 's_ys1', 's_xs2', 's_ys2',
+                                                    'cov_xy', 'cov_xs1ys1', 'cov_xs2ys2', 'cov_xb1yb1', 'cov_xb2yb2']]=np.array([x, xb1, xb2, y, yb1, yb2, xs1, ys1,  xs2, ys2,
+                    s_x, s_y, s_xb1, s_xb2, s_yb1, s_yb2, s_xs1, s_ys1, s_xs2, s_ys2, cov_xy, cov_xs1ys1, cov_xs2ys2, cov_xb1yb1, cov_xb2yb2]).T
+                
+                process_inputs_df.loc[df_idx, ['Dtb', 'Dts1b', 'Dts2b', 'Dts']]=[Dtb, Dts1b, Dts2b, Dts]
+        
+                
+        self.__process_inputs__=process_inputs_df
+        self.processing_df=processing_df
+    
+    
+    def blank_correction(self):
+                
+        if self.__process_inputs__ is None:
+            raise ValueError('Must initialise batch first.')
+        
+        nan_df=self.cps_mean.copy()
+        nan_df.loc[:, self.analytes['isotope_gas']]=np.nan
+        self.cps_blk_corrected=nan_df
+        self.cps_blk_corrected_se=nan_df
+        
+        for samp_pos in pd.unique(self.__process_inputs__['run_order']):
+            p_df=self.__process_inputs__.loc[self.__process_inputs__['run_order']==samp_pos, :]
+            isotopes=pd.unique(p_df['isotope_gas'])
+            blkcorr=calc_blkcorr(p_df['x'], p_df['xb2'], p_df['xb1'], p_df['Dtb'])
+            blkcorr_se=calc_blkcorr_variance(p_df['x'], p_df['xb2'], p_df['xb1'], p_df['Dtb'], 
+                                             p_df['s_x'], p_df['s_xb1'], p_df['s_xb2'])**0.5
+            
+            self.cps_blk_corrected.loc[samp_pos, isotopes]=np.array(blkcorr)
+            self.cps_blk_corrected_se.loc[samp_pos, isotopes]=np.array(blkcorr_se)
+            
+            
 
-                #Calculate bracketed ratios and errors
-                blkcorr=calculate_blkcorr(x, xb2, xb1, Dtb)
-                blkcorr_se=calc_blkcorr_variance(x, xb2, xb1, Dtb, s_x, s_xb1, s_xb2)**0.5
-                ratio=calc_R(x, xb2, xb1, y, yb2, yb1, Dtb)
-                ratio_se=calc_R_variance(x, xb2, xb1, y, yb2, yb1, Dtb, 
-                                          cov_xy, cov_xb1yb1, cov_xb2yb2, 
-                                          s_x, s_y, s_xb1, s_xb2, s_yb1, s_yb2)**0.5
-                bracketed_ratio=calc_bracketed(x, xb2, xb1, y, yb2, yb1, Dtb, 
-                                               xs1, ys1, Dts1b, xs2, ys2, Dts2b, Dts)
-                bracketed_ratio_se=calc_bracketed_variance(x, xb2, xb1, y, yb2, yb1, Dtb,
-                                                            xs1, ys1, Dts1b, xs2, ys2, Dts2b, Dts, 
-                                                            cov_xy, cov_xb1yb1, cov_xb2yb2, 
-                                                            cov_xs1ys1, cov_xs2ys2, 
-                                                            s_x, s_y, s_xb1, s_xb2, s_yb1, s_yb2, 
-                                                            s_xs1, s_ys1, s_xs2, s_ys2)**0.5
-                
-                
-                #store results
-                self.blk_corrected.loc[samp_pos, isotopes]=blkcorr
-                self.blk_corrected_se.loc[samp_pos, isotopes]=blkcorr_se
-                self.cps_ratio.loc[samp_pos, isotopes]=ratio
-                self.cps_ratio_se.loc[samp_pos, isotopes]=ratio_se
-                self.bracketed.loc[samp_pos, isotopes]=bracketed_ratio
-                self.bracketed_se.loc[samp_pos, isotopes]=bracketed_ratio_se
-                
-                
-                #single-point calibration
-                #self.bracketed.loc[samp_pos, self.cali_stnd_df.index]*self.cali_stnd_df.loc[isotopes]
-                
+    
+    def ratio_correction(self):
+
+        if self.__process_inputs__ is None:
+            raise ValueError('Must initialise batch first.')
+        
+        nan_df=self.cps_mean.copy()
+        nan_df.loc[:, self.analytes['isotope_gas']]=np.nan
+        self.cps_ratio=nan_df.copy()
+        self.cps_ratio_se=nan_df.copy()
+        
+        for samp_pos in pd.unique(self.__process_inputs__['run_order']):
+            p_df=self.__process_inputs__.loc[self.__process_inputs__['run_order']==samp_pos, :]
+            isotopes=pd.unique(p_df['isotope_gas'])
+            R=calc_R(p_df['x'], p_df['xb2'], p_df['xb1'], p_df['y'], p_df['yb2'], p_df['yb1'], p_df['Dtb'])
+            R_se=calc_R_variance(p_df['x'], p_df['xb2'], p_df['xb1'], p_df['y'], p_df['yb2'], p_df['yb1'], p_df['Dtb'], 
+                                    p_df['cov_xy'], p_df['cov_xb1yb1'], p_df['cov_xb2yb2'], 
+                                    p_df['s_x'], p_df['s_y'], p_df['s_xb1'], p_df['s_xb2'], p_df['s_yb1'], p_df['s_yb2'])**0.5
+            
+            self.cps_ratio.loc[samp_pos, isotopes]=np.array(R)
+            self.cps_ratio_se.loc[samp_pos, isotopes]=np.array(R_se)
+
+        
+        
+        
+    
+    def bracket_correction(self):
+        #Calculate bracketed ratios and errors
+        
+        if self.__process_inputs__ is None:
+            raise ValueError('Must initialise batch first.')
+        
+        nan_df=self.cps_mean.copy()
+        nan_df.loc[:, self.analytes['isotope_gas']]=np.nan
+        self.bracketed=nan_df.copy()
+        self.bracketed_se=nan_df.copy()
+        
+        for samp_pos in pd.unique(self.__process_inputs__['run_order']):
+            p_df=self.__process_inputs__.loc[self.__process_inputs__['run_order']==samp_pos, :]
+            isotopes=pd.unique(p_df['isotope_gas'])
+            bracketed_ratio=calc_bracketed(p_df['x'], p_df['xb2'], p_df['xb1'], p_df['y'], p_df['yb2'], p_df['yb1'], p_df['Dtb'], 
+                                        p_df['xs1'], p_df['ys1'], p_df['Dts1b'], p_df['xs2'], p_df['ys2'], p_df['Dts2b'], p_df['Dts'])
+            bracketed_ratio_se=calc_bracketed_variance(p_df['x'], p_df['xb2'], p_df['xb1'], p_df['y'], p_df['yb2'], p_df['yb1'], p_df['Dtb'],
+                                                    p_df['xs1'], p_df['ys1'], p_df['Dts1b'], p_df['xs2'], p_df['ys2'], p_df['Dts2b'], p_df['Dts'], 
+                                                    p_df['cov_xy'], p_df['cov_xb1yb1'], p_df['cov_xb2yb2'], 
+                                                    p_df['cov_xs1ys1'], p_df['cov_xs2ys2'], 
+                                                    p_df['s_x'], p_df['s_y'], p_df['s_xb1'], p_df['s_xb2'], p_df['s_yb1'], p_df['s_yb2'], 
+                                                    p_df['s_xs1'], p_df['s_ys1'], p_df['s_xs2'], p_df['s_ys2'])**0.5
+            self.bracketed.loc[samp_pos, isotopes]=np.array(bracketed_ratio)
+            self.bracketed_se.loc[samp_pos, isotopes]=np.array(bracketed_ratio_se)
+
+        
         
     def calibrate(self, omissions={}):
         #TODO write ability to remove standards from calibration
         #TODO write automatic removal of P/A standards
-        pass
+        self.calibrated={}
+        self.calibrated_se={}
+        for mode in self.mode_options:
+            nan_df=self.cps_mean.copy()
+            nan_df.loc[:, self.analytes['isotope_gas']]=np.nan
+            self.calibrated[mode]=nan_df.copy()
+            self.calibrated_se[mode]=nan_df.copy()
         
         if self.cali_mode == 'ratio curve':
             
@@ -1361,7 +1355,29 @@ class Batch:
             
             self.curve_mdl=curve_mdl_df
             self.curve_resid=curve_resid_df
-                
+    
+    
+    def get_conversion_to_conc(self, stnd_conc=1, units='moles'):
+        stnd_name=list(self.cali_order.keys())[0]
+        conc_stnd_df=make_stndvals_df(df=self.cali_stnd_df, stnd_names=stnd_name, 
+                                      isotopes=self.cali_stnd_df.index.values, 
+                                      cali_mode='conc single', dilutions=stnd_conc, 
+                                      units=units)
+        
+        units_dict=dict(conc_stnd_df['units'])
+        if units=='grams':
+            from Pygilent.stnds import get_atomic_mass
+            elements= [deconstruct_isotope_gas(x, 'element') for x in conc_stnd_df.index]
+            
+            for iso in conc_stnd_df.index:
+                molar_mass=get_atomic_mass(deconstruct_isotope_gas(iso, 'element'))
+                self.calibrated[self.cali_mode].loc[:, iso]*=molar_mass
+        
+        return self.calibrated[self.cali_mode], units_dict
+            
+
+            
+            
                 
                 
                 
