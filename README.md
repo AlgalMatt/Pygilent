@@ -8,10 +8,6 @@ Pygilent is a Python package for interacting with Agilent ICP-MS instruments (te
 - Perform processing on the batch using the new Batch class.
 - Currently able to process data for trace-element ratios.
 
-## Installation
-
-You can install Pygilent using pip:
-
 ## Useage
 
-See examples.py for useful examples. 
+See examples directory for useful examples. 

@@ -24,3 +24,4 @@ new_batch.ratio_correction()
 #Why does bracket correction produce non 1's for STGFrm??
 new_batch.bracket_correction()
 new_batch.calibrate()
+

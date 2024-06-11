@@ -102,6 +102,22 @@ def find_outliers(array1, mod=1.5):
     return outs
 
 def deconstruct_isotope_gas(input, output='all'):
+    """Deconstructs an isotope_gas string into constituent parts. The isotope_gas 
+    string is assumed to be in the format of 'mass_element_gas_mode' and ignores
+    Q2 masses. The function returns the mass, element, and gas mode as separate
+    strings.
+
+    Args:
+        input (string): isotope_gas string
+        output (str, optional): Define the output component ('mass', 'element', 
+        'gas_mode' or 'all'). Defaults to 'all'.
+
+    Raises:
+        ValueError: if output is not one of 'mass', 'element', 'gas_mode' or 'all'
+
+    Returns:
+        strings of mass, element, and gas mode as strings
+    """
     
     str_series=pd.Series(input)
     
@@ -113,11 +129,6 @@ def deconstruct_isotope_gas(input, output='all'):
         element=element[0]
         gas_mode=gas_mode[0]
         
-        
-    
-    #join the mass and element arrays to make isotope
-    isotope=mass+element
-    
 
     if output=='all':
         return mass, element, gas_mode
@@ -130,9 +141,22 @@ def deconstruct_isotope_gas(input, output='all'):
     else:
         raise ValueError('Invalid output type. Please select from: all, mass, element, gas_mode.')
     
-def unarchive_replicates(rep_list):
+def unarchive_replicates(rep_series):
+    """Extracts replicates from a list of strings and returns a dataframe of
+    replicates. The function assumes that the replicates are in the format of
+    #,#,# where # is a number (for cps) or 'PAU' (for det mode). 
+
+    Args:
+        rep_list (Pandas.Series): A series of lists containing replicates as strings.
+
+    Returns:
+        Pandas.DataFrame: A dataframe of the same length as the input series with
+        columns of replicates. The columns are named by the order of the replicates.
+    """
+    
+    
     pattern=r'(\d*\.\d+|[PAU])'
-    rep_df=rep_list.str.extractall(pattern).unstack()
+    rep_df=rep_series.str.extractall(pattern).unstack()
     rep_df=rep_df.droplevel(0, axis=1)
     rep_df.rename(columns={i: i+1 for i in rep_df.columns}, inplace=True)
     return rep_df
@@ -1379,9 +1403,15 @@ class Batch:
         return self.calibrated[self.cali_mode], units_dict
             
 
+    def inspect_calibration(self, isotope, omissions={}):
+            import statsmodels.api as sm
+            X=self.bracketed.loc[self.curve_resid.index, isotope].values
+            ypred=self.curve_mdl.loc[isotope, 'fit'].predict(sm.add_constant(X))
+            yresid=self.curve_resid.loc[:, isotope].values
+            y=ypred+yresid
             
             
-                
+
                 
                 
 
