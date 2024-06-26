@@ -398,8 +398,11 @@ def import_batch(path=None, ui=False, stnd_df=None):
             batch_df['time']=pd.to_datetime(batch_df['time'], 
                                         format="%d/%m/%Y %H:%M") 
     else:
-        batch_df['time']=pd.to_datetime(batch_df['time'], format="%d-%b-%y %I:%M:%S %p") 
         
+        try:
+            batch_df['time']=pd.to_datetime(batch_df['time'], format="%d-%b-%y %I:%M:%S %p") 
+        except ValueError:
+            batch_df['time']=pd.to_datetime(batch_df['time'])
     
     
     batch_df=batch_df.loc[(batch_df['Acquisition Result']=='Pass') & 
@@ -711,6 +714,12 @@ calc_bracketed_variance = sym.lambdify((x_sym, xb2_sym, xb1_sym, y_sym, yb2_sym,
 
 
 class Batch:   
+    """An object for organising and processing Agilent ICP-MS batch data.
+
+    Attributes:
+    
+    """
+    
     mode_options=('ratio curve', 'ratio single', 'conc curve', 'conc single')
     
     def __init__(self, run_name=None, batch_info=None, total_reps=None, analytes=None, rep_df=None, 
@@ -764,6 +773,22 @@ class Batch:
     
     
     def set_blks(self, blk_order=np.array([], dtype=int), how='auto', keyword='blk', case=False):
+        """Define the positions of the blanks within the batch
+
+        Args:
+            blk_order (array, optional): Array of sample positions within the batch.
+            how (str, optional): How the blanks should be set. Can be 'auto' (default),
+                where the keyword is searched for in the sample name. If 'ui' then a user interface is 
+                made for selection of blanks. If 'manual' then the blank positions are set by
+                the blk_order argument. 
+            keyword (str, optional): Sample name search keyword used when how = 'auto'. 
+                Defaults to 'blk'.
+            case (bool, optional): Case sensitivity of the keyword. Defaults to False.
+
+        Raises:
+            ValueError: If 'auto', 'manual', or 'ui' are not given in how argument.
+        """
+        
         
         if how not in ['auto', 'manual', 'ui']:
             raise ValueError('Invalid method. Please select from: auto, manual, ui.')
