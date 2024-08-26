@@ -19,9 +19,9 @@ def make_stndvals_df(df, stnd_names, isotopes, cali_mode, dilutions=np.array([])
         raise ValueError('Invalid units. Please select from: moles or grams.')
     
     
-    if  cali_mode=='conc curve':        
-        if len(stnd_names)!=1 and type(stnd_names)!=str:
-            raise ValueError(f'Only one standard name can be used for {cali_mode}.')
+    #if  cali_mode=='conc curve':        
+    #    if len(stnd_names)!=1 and type(stnd_names)!=str:
+    #        raise ValueError(f'Only one standard name can be used for {cali_mode}.')
     """
     if 'conc single' in cali_mode and len(dilutions)>1:
         raise ValueError(f'Only one dilution can be used for {cali_mode}.')
