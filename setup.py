@@ -7,7 +7,8 @@ setuptools.setup(
     author="Matt Dumont",
     author_email="mdumont1989@gmail.com",
     description="Tools for working with Agilent data files.",
-    #long_description=open('DESCRIPTION.rst').read(),
+    long_description=open('README.md').read(),
+    long_description_content_type='text/markdown',
     packages=setuptools.find_packages(),
     install_requires=[],
     classifiers=[
