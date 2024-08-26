@@ -1411,10 +1411,10 @@ class Batch:
         if 'single' in self.cali_mode:
             
             isotopes=self.cali_stnd_df.index
-            
+            #currently only allows one standard type for single-point calibration
             single_df=x_df[['sample_name', 'run_order']].copy()
-            single_df[isotopes]=x_df.loc[:, isotopes]*self.cali_stnd_df.loc[:, self.cali_order.keys()]
-
+            single_df.loc[:, isotopes]=x_df.loc[:, isotopes].mul(dict(self.cali_stnd_df.iloc[:, 1]))
+            
             self.calibrated_output[self.cali_mode]=single_df
         
         if 'curve' in self.cali_mode:  
@@ -1424,8 +1424,6 @@ class Batch:
             
             import statsmodels.api as sm
             
-                
-
             curve_mdl_by_block=[]         
                 
             for block in cali_blocks:
