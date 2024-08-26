@@ -684,7 +684,7 @@ class Batch:
                  calibrated_output=None, calibrated_output_se=None, cov=None, 
                  cali_stnd_df=None, curve_mdl=None, blk_order=np.array([], dtype=int), brkt_order=np.array([], dtype=int), 
                  brkt_stnd=None, cali_mode=None, internal_stnd=None, 
-                 cali_order={}, stnd_df=None, __process_inputs__=None, cali_blocks=None):
+                 cali_order={}, stnd_df=None, __process_inputs__=None, cali_blocks=None, bracketed=None, bracketed_se=None):
         self.run_name=run_name
         self.batch_info=batch_info
         self.total_reps=total_reps
@@ -724,7 +724,8 @@ class Batch:
         self.internal_stnd=internal_stnd
         
         
-        
+        self.bracketed=bracketed
+        self.bracketed_se=bracketed_se
         self.cali_order=cali_order
         self.stnd_df=stnd_df
         self.cali_blocks=cali_blocks
@@ -968,16 +969,18 @@ class Batch:
             else:
                 stnd_conc_dict=dict(zip(unique_stnd_names, np.array(stnd_conc_defaults).astype(float)))
 
-            self.cali_order={val:[] for val in stnd_conc_dict.values()}
+            
+            dilutions=[val for val in stnd_conc_dict.values()]
+            self.cali_order={str(val)+'_'+stnd_name:[] for val in dilutions}
 
             for key, val in stnd_conc_dict.items():
                 key_rows=cali_rows[self.batch_info.loc[cali_rows, 'sample_name']==key]
-                self.cali_order[val].extend(list(key_rows))
+                self.cali_order[str(val)+'_'+stnd_name].extend(list(key_rows))
             
             #make cali_stnd_df
             self.cali_stnd_df=make_stndvals_df(df=stnd_vals_df, stnd_names=stnd_name, 
                                                isotopes=self.analytes['isotope_gas'].values, 
-                                               cali_mode=self.cali_mode, dilutions=list(self.cali_order.keys()), 
+                                               cali_mode=self.cali_mode, dilutions=dilutions, 
                                                units=units)
         
         for key, val in self.cali_order.items():
@@ -1147,48 +1150,44 @@ class Batch:
             df_idx=process_inputs_df['run_order']==samp_pos
                 
             #find bracketing blanks  
-            if self.blk_order is not None:
+            if len(self.blk_order)>0:
                 blk1, blk2=find_brackets(samp_pos, self.blk_order)
                 processing_df.loc[samp_pos, 'blk1']=blk1
                 processing_df.loc[samp_pos, 'blk2']=blk2
+                
+                #find relative timings between brackets and blanks
+                if blk1 == blk2:
+                    Dtb=0
+                    Dts1b=0
+                    Dts2b=0
+                    
+                    if self.internal_stnd is not None:
+                        processing_df.loc[samp_pos, 'brkt1_blk_time']=Dts1b
+                        processing_df.loc[samp_pos, 'brkt2_blk_time']=Dts2b
+                else:
+                    Dtb=(self.batch_info.loc[samp_pos, 'session_time']-self.batch_info.loc[blk1, 'session_time'])/(
+                        self.batch_info.loc[blk2, 'session_time']-self.batch_info.loc[blk1, 'session_time'])
+                    if self.internal_stnd is not None:
+                        Dts1b=(self.batch_info.loc[brkt1, 'session_time']
+                                -self.batch_info.loc[blk1, 'session_time'])/(
+                                    self.batch_info.loc[blk2, 'session_time']
+                                    -self.batch_info.loc[blk1, 'session_time'])
+                        processing_df.loc[samp_pos, 'brkt1_blk_time']=Dts1b
+                        
+                        Dts2b=(self.batch_info.loc[brkt2, 'session_time']
+                                -self.batch_info.loc[blk1, 'session_time'])/(
+                                    self.batch_info.loc[blk2, 'session_time']
+                                    -self.batch_info.loc[blk1, 'session_time'])
+                        processing_df.loc[samp_pos, 'brkt2_blk_time']=Dts2b
+                processing_df.loc[samp_pos, 'sample_blk_time']=Dtb
+                
 
             #find bracketing standards  
-            if self.brkt_order is not None:
+            if len(self.brkt_order)>0:
                 brkt1, brkt2=find_brackets(samp_pos, self.brkt_order)
                 processing_df.loc[samp_pos, 'brkt1']=brkt1
                 processing_df.loc[samp_pos, 'brkt2']=brkt2
-            
-            
-            #find relative timings between brackets and blanks
-            #blks
-            if blk1 == blk2:
-                Dtb=0
-                Dts1b=0
-                Dts2b=0
-                processing_df.loc[samp_pos, 'sample_blk_time']=Dtb
-                if self.internal_stnd is not None:
-                    processing_df.loc[samp_pos, 'brkt1_blk_time']=Dts1b
-                    processing_df.loc[samp_pos, 'brkt2_blk_time']=Dts2b
-            else:
-                Dtb=(self.batch_info.loc[samp_pos, 'session_time']-self.batch_info.loc[samp_pos, 'session_time'])/(
-                    self.batch_info.loc[blk2, 'session_time']-self.batch_info.loc[blk1, 'session_time'])
-                processing_df.loc[samp_pos, 'sample_blk_time']=Dtb
-                if self.internal_stnd is not None:
-                    Dts1b=(self.batch_info.loc[brkt1, 'session_time']
-                            -self.batch_info.loc[blk1, 'session_time'])/(
-                                self.batch_info.loc[blk2, 'session_time']
-                                -self.batch_info.loc[blk1, 'session_time'])
-                    processing_df.loc[samp_pos, 'brkt1_blk_time']=Dts1b
-                    
-                    Dts2b=(self.batch_info.loc[brkt2, 'session_time']
-                            -self.batch_info.loc[blk1, 'session_time'])/(
-                                self.batch_info.loc[blk2, 'session_time']
-                                -self.batch_info.loc[blk1, 'session_time'])
-                    processing_df.loc[samp_pos, 'brkt2_blk_time']=Dts2b
-            
-            
-            #brkt standards
-            if self.internal_stnd is not None:
+                
                 if brkt1 == brkt2:
                     Dts=0
                     processing_df.loc[samp_pos, 'sample_stnd_bracket_time']=Dts
@@ -1281,18 +1280,18 @@ class Batch:
         
         nan_df=self.cps_mean.copy()
         nan_df.loc[:, self.analytes['isotope_gas']]=np.nan
-        self.cps_blk_corrected=nan_df
-        self.cps_blk_corrected_se=nan_df
+        self.cps_blk_corrected=nan_df.copy()
+        self.cps_blk_corrected_se=nan_df.copy()
         
-        for samp_pos in pd.unique(self.__process_inputs__['run_order']):
-            p_df=self.__process_inputs__.loc[self.__process_inputs__['run_order']==samp_pos, :]
+        for i, row in nan_df.iterrows():
+            p_df=self.__process_inputs__.loc[self.__process_inputs__['run_order']==i, :]
             isotopes=pd.unique(p_df['isotope_gas'])
             blkcorr=calc_blkcorr(p_df['x'], p_df['xb2'], p_df['xb1'], p_df['Dtb'])
             blkcorr_se=calc_blkcorr_variance(p_df['x'], p_df['xb2'], p_df['xb1'], p_df['Dtb'], 
                                              p_df['s_x'], p_df['s_xb1'], p_df['s_xb2'])**0.5
             
-            self.cps_blk_corrected.loc[samp_pos, isotopes]=np.array(blkcorr)
-            self.cps_blk_corrected_se.loc[samp_pos, isotopes]=np.array(blkcorr_se)
+            self.cps_blk_corrected.loc[i, isotopes]=np.array(blkcorr)
+            self.cps_blk_corrected_se.loc[i, isotopes]=np.array(blkcorr_se)
             
             
 
@@ -1362,7 +1361,7 @@ class Batch:
         
         
         if self.cali_blocks is None:
-            cali_blocks=0
+            cali_blocks=[0]
         else:
             cali_blocks=pd.unique(self.cali_blocks['cali_block'])
         
@@ -1387,6 +1386,9 @@ class Batch:
         
         if 'curve' in self.cali_mode:  
         
+            self.curve_mdl={}
+            self.curve_resid={}
+            
             curve_mdl_df=pd.DataFrame([], index=self.cali_stnd_df.index, columns=['fit', 'R2', 'b1', 'b1_se', 'b0', 'b0_se'])
             curve_resid_df=pd.DataFrame([])
             
@@ -1398,7 +1400,8 @@ class Batch:
                     
                 for iso in self.cali_stnd_df.index:
                     
-                    if self.internal_stnd.values() is not None and iso in self.internal_stnd.values():
+                    #skip over the ratio isotope if used
+                    if self.internal_stnd is not None and iso in self.internal_stnd.values():
                         continue
                     
                     X=np.array([])
@@ -1406,7 +1409,7 @@ class Batch:
                     y=np.array([])
                     stnd_orders=np.array([])
                     
-                    if len(len(pd.unique(pd.Series(cali_blocks))))==1:
+                    if len(pd.unique(pd.Series(cali_blocks)))==1:
                     
                         for stnd, order in self.cali_order.items():  
                             X=np.append(X, x_df.loc[order, iso].values) 
@@ -1426,12 +1429,28 @@ class Batch:
                         y=y[idx]
                         stnd_orders=stnd_orders[idx]
                         
+                    idx=np.isnan(y)
+                    X=X[~idx]
+                    y=y[~idx]
+                    stnd_orders=stnd_orders[~idx]
+                    if len(X)<2:
+                        continue
                     
                     #remove nans, infs and negatives
                     
-                    idx=np.isnan(X) | np.isinf(X) | (X<0) | np.isnan(y) 
+                    idx=np.isnan(X) | np.isinf(X) | (X<0)
                     X=X[~idx]
                     y=y[~idx]
+                    stnd_orders=stnd_orders[~idx]
+                    
+                    if len(X)<2:
+                        print('Not enough good calibration data for '+iso)
+                        print('Consider single-point calibration for this isotope.')
+                        continue
+                    
+                    
+                    
+                    
                     
                     #fit the curve
                     
@@ -1451,8 +1470,8 @@ class Batch:
                     curve_resid_df=pd.concat([curve_resid_df, residuals], axis=1)
                     
                     #fit data
-                    if len(len(pd.unique(pd.Series(cali_blocks))))==1:
-                        data_idx=new_batch.batch_info['run_order'].values
+                    if len(pd.unique(pd.Series(cali_blocks)))==1:
+                        data_idx=self.batch_info['run_order'].values
                     else:
                         data_idx=np.array(self.cali_blocks.loc[self.cali_blocks['cali_block']==block, 'run_order'])
                     
