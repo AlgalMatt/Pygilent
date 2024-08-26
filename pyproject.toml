@@ -15,6 +15,8 @@ pandas = "^2.2.1"
 tk = "^0.1.0"
 matplotlib = "^3.8.3"
 pathlib = "^1.0.1"
+sympy = "^1.13.2"
+statsmodels = "^0.14.2"
 
 [tool.poetry.dev-dependencies]
 
