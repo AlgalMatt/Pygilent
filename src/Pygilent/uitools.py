@@ -34,6 +34,56 @@ def select_folder(title="Select a folder"):
     root.destroy()
     return folder_select
 
+
+def create_entry_window(string_list, default_values):
+    # Create the main Tkinter window
+    root = tk.Tk()
+    root.title("User Input Window")
+
+    # Dictionary to store user inputs
+    user_inputs = {}
+
+    # Function to handle 'OK' button click
+    def ok_button_click():
+        for idx, string in enumerate(string_list):
+            user_input = entry_fields[idx].get()
+            try:
+                float_value = float(user_input)
+                user_inputs[string] = float_value
+            except ValueError:
+                show_error_message("Error", "Please enter a valid number for '{}'.".format(string))
+                return
+            
+        root.destroy()
+        
+    def show_error_message(title, message):
+        tk.messagebox.showerror(title, message)
+    
+    #title
+    instructions_label = tk.Label(root, text="Enter conc scalings")
+    instructions_label.grid(row=0, column=0, columnspan=2, pady=5)
+        
+    # Create labels and entry fields with default values
+    entry_fields = []
+    for idx, string in enumerate(string_list):
+        label = tk.Label(root, text=string)
+        label.grid(row=idx + 1, column=0, padx=10, pady=5, sticky="w")
+        default_value = default_values[idx] if default_values and idx < len(default_values) else ""
+        entry = tk.Entry(root)
+        entry.insert(0, default_value)
+        entry.grid(row=idx + 1, column=1, padx=10, pady=5, sticky="e")
+        entry_fields.append(entry)
+
+    # Create 'OK' button
+    ok_button = tk.Button(root, text="OK", command=ok_button_click)
+    ok_button.grid(row=len(string_list) + 1, column=0, columnspan=2, pady=10)
+
+    # Run the Tkinter main loop
+    root.mainloop()
+
+    return user_inputs
+
+
 def fancycheckbox(items,  title="", defaults=None, single=False):
     """    
     Creates a pop-up simple checkbox from a list of items. Returns indexes of 
@@ -342,6 +392,177 @@ def fancycheckbox_2window(items_1, items_2,  title_1="", title_2="",
 
 
 
+def cali_block_select(batch_info, title_1="Cali standards", title_2="Samples"):
+
+    #defaults is a list of dictionaries    
+    
+    global selected_1, selected_2
+    #if no defaults used, create a list of False to implement defaults.
+    #if defaults is None:
+        
+    #    defaults={key: [False]*len(items_1) for key in items_2}
+    #Otherwise fill in the remainder of the dictionary with False
+    #else:
+    #    for key in np.setdiff1d(items_2, list(defaults.keys())): 
+    #        defaults[key]=[False]*len(items_1)
+    
+    
+    
+    
+    selected_1=defaults.copy()
+    selected_2=np.append([True], [False]*(len(items_2)-1))
+
+    # Create the main window
+    window = tk.Tk()
+    #Keep the window at the front of other apps.
+    window.lift()
+    window.attributes("-topmost", True)
+    
+    
+    
+    w = 700 # width for the Tk root
+    h = 700 # height for the Tk root
+    
+    # get screen width and height
+    ws = window.winfo_screenwidth() # width of the screen
+    hs = window.winfo_screenheight() # height of the screen
+    
+    # calculate x and y coordinates for the Tk root window
+    x = (ws/2) - (w/2)
+    y = (hs/2) - (h/2)
+    
+    # set the dimensions of the screen 
+    # and where it is placed
+    window.geometry('%dx%d+%d+%d' % (w, h, x, y))
+    
+    #make sure scrolling area always fills the window area
+    window.rowconfigure(1, weight=1)
+
+    # Function to update the list of selected items 1
+    def update_selected_1(var):
+        global selected_1
+        
+        if single_1:
+            for i in range(len(cb_vars_1)):
+                if i != var:
+                    cb_vars_1[i].set(False)
+                    cb_list_1[i]['bg']='white'
+        
+        item_2_selected=np.array(items_2)[selected_2][0]
+        selected_1[item_2_selected] = [cb_vars_1[i].get() for i in range(len(cb_vars_1))]
+        if cb_vars_1[var].get():
+            cb_list_1[var]['bg']='yellow'
+        else:
+            cb_list_1[var]['bg']='white'
+        
+        if unique:
+            #make sure only one item 2 is associated with each item 1
+            for key, value in selected_1.items():
+                if item_2_selected!=key:
+                    idx=np.array(selected_1[item_2_selected]) & np.array(value)
+                    array=np.array(selected_1[key])
+                    array[idx]=False
+                    selected_1[key]=list(array)
+            
+        #if single_2 is True, only one item 2 can be selected
+        if single_2:
+            for key, value in selected_1.items():
+                if item_2_selected!=key:
+                    selected_1[key]=[False]*len(items_1)
+    
+        # Function to update the list of selected items 2 
+    def update_selected_2(var2):
+        global selected_2   
+        #only allow one to be selected     
+        for i in range(len(cb_vars_2)):
+            if i != var2:
+                cb_vars_2[i].set(False)
+                cb_list_2[i]['bg']='white'
+        selected_2 = [cb_vars_2[i].get() for i in range(len(cb_vars_2))]
+        if cb_vars_2[var2].get():
+            cb_list_2[var2]['bg']='yellow'
+        else:
+            cb_list_2[var2]['bg']='white'
+        item_2_selected=np.array(items_2)[selected_2][0]
+        
+        for i, booleon in enumerate(selected_1[item_2_selected]):
+            if booleon:
+                booleon=True
+            else:
+                booleon=False
+            cb_vars_1[i].set(booleon)
+            if booleon:
+                cb_list_1[i]['bg']='yellow'
+            else:
+                cb_list_1[i]['bg']='white'
+        
+
+
+    #The title of the 1st window
+    label=tk.Label(window, text=title_1, font=("Helvetica", 10))
+    label.grid(row=0, column=0, pady=5)
+    #The title of the 2nd window
+    label=tk.Label(window, text=title_2, font=("Helvetica", 10))
+    label.grid(row=0, column=1, pady=5)
+
+    #make the window scrollable
+    textframe=ScrolledText(window, width=40, height=50)
+    textframe.grid(row=1, column=0, sticky='nsw', rowspan=2)
+    # Create a list to store the checkbox variables
+    cb_vars_1 = []
+    cb_list_1=[]
+    
+    
+    item_selected=np.array(items_2)[selected_2][0]
+    # Create checkboxes for window 1
+    for i, item in enumerate(items_1):
+        
+        cb_var = tk.BooleanVar()
+        cb = tk.Checkbutton(textframe, text=item, variable=cb_var,
+                            command=lambda var=i: update_selected_1(var), 
+                            font=("Arial",10),fg="black", bg="white")
+        
+        cb_list_1.append(cb)
+        textframe.window_create('end', window=cb)
+        textframe.insert('end', '\n')
+        cb_vars_1.append(cb_var)
+        if defaults[item_selected][i]:
+            cb.select()
+            cb['bg']='yellow'
+    
+    
+    
+    # create second textframe window
+    textframe2=ScrolledText(window, width=40, height=50)
+    textframe2.grid(row=1, column=1, sticky='nse', rowspan=2)
+    cb_vars_2 = []
+    cb_list_2=[]
+    for j, item2 in enumerate(items_2):
+        cb_var2 = tk.BooleanVar()
+        cb2 = tk.Checkbutton(textframe2, text=item2, variable=cb_var2,
+                            command=lambda var2=j: update_selected_2(var2), 
+                            font=("Arial",10),fg="black", bg="white")
+        
+        cb_list_2.append(cb2)
+        textframe2.window_create('end', window=cb2)
+        textframe2.insert('end', '\n')
+        cb_vars_2.append(cb_var2)
+        if j==0:
+            cb2.select()
+            cb2['bg']='yellow'
+    
+    
+    
+
+    # Create a "Submit" button
+    submit_button = tk.Button(window, text="Submit", command=lambda: window.destroy())
+    submit_button.grid(row=3, column=0, columnspan=2)
+    
+    
+    # Run the main loop
+    window.mainloop()
+    #selected_indexes = np.array([i for i, x in enumerate(selected) if x])
+    return selected_1
 
 
 def textinputbox(title=""):

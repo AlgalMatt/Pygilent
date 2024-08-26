@@ -6,6 +6,7 @@ import warnings
 from Pygilent.stnds import get_default_stndvals, make_stndvals_df
 import sympy as sym
 from math import gamma
+import re
 gamma_vectorized=np.vectorize(gamma)
 ##Functions
 
@@ -176,53 +177,6 @@ def extract_float_substring(input_string):
         # Return an empty string if no match is found
         return ""
 
-def create_entry_window(string_list, default_values):
-    # Create the main Tkinter window
-    root = tk.Tk()
-    root.title("User Input Window")
-
-    # Dictionary to store user inputs
-    user_inputs = {}
-
-    # Function to handle 'OK' button click
-    def ok_button_click():
-        for idx, string in enumerate(string_list):
-            user_input = entry_fields[idx].get()
-            try:
-                float_value = float(user_input)
-                user_inputs[string] = float_value
-            except ValueError:
-                show_error_message("Error", "Please enter a valid number for '{}'.".format(string))
-                return
-            
-        root.destroy()
-        
-    def show_error_message(title, message):
-        tk.messagebox.showerror(title, message)
-    
-    #title
-    instructions_label = tk.Label(root, text="Enter conc scalings")
-    instructions_label.grid(row=0, column=0, columnspan=2, pady=5)
-        
-    # Create labels and entry fields with default values
-    entry_fields = []
-    for idx, string in enumerate(string_list):
-        label = tk.Label(root, text=string)
-        label.grid(row=idx + 1, column=0, padx=10, pady=5, sticky="w")
-        default_value = default_values[idx] if default_values and idx < len(default_values) else ""
-        entry = tk.Entry(root)
-        entry.insert(0, default_value)
-        entry.grid(row=idx + 1, column=1, padx=10, pady=5, sticky="e")
-        entry_fields.append(entry)
-
-    # Create 'OK' button
-    ok_button = tk.Button(root, text="OK", command=ok_button_click)
-    ok_button.grid(row=len(string_list) + 1, column=0, columnspan=2, pady=10)
-
-    # Run the Tkinter main loop
-    root.mainloop()
-
-    return user_inputs
 
 def pivot_isotopes(df, var, index=['run_order', 'sample_name']):
     df_piv=df.pivot_table(index=index, columns='isotope_gas', values=var, sort=False, 
@@ -972,17 +926,28 @@ class Batch:
             
         
         elif self.cali_mode == 'conc curve': 
-            if how =='auto' & keyword is None:
+            if how =='auto' and keyword is None:
                 raise ValueError('Keyword required for auto method.')
             if keyword is not None:
                 if type(keyword) is not str:
                     raise ValueError('Keyword must be a single standard name for conc curve mode.')
-                associate_defaults={keyword: self.batch_info['sample_name'].str.contains(keyword, case=False)}
+                
+                stnd_name_idx=stnd_vals_df.columns.str.contains(keyword.lower(), case=False)
+                
+                if np.sum(stnd_name_idx)==0:
+                    raise ValueError('Keyword not found in standard names.')
+                if np.sum(stnd_name_idx)>1:
+                    raise ValueError('Keyword found in multiple standard names.')
+                
+                stnd_name=stnd_vals_df.columns[stnd_name_idx].values[0]
+            
+                associate_defaults={stnd_name: self.batch_info['sample_name'].str.contains(keyword, case=False)}
             else:
                 associate_defaults=None
             if how=='ui':
-                cali_dict=fancycheckbox_2window(self.batch_info['sample_name'], stnd_vals_names, associate_defaults,
-                                                'Associate calibration standards with standards list', single=True)
+                cali_dict=fancycheckbox_2window(items_1=self.batch_info['sample_name'], 
+                                                items_2=stnd_vals_names, defaults=associate_defaults,
+                                               title_1='sample list', title_2='stock standard list', single_2=True)
             else:
                 cali_dict=associate_defaults
             
@@ -995,6 +960,9 @@ class Batch:
             stnd_conc_defaults=[extract_float_substring(s) for s in unique_stnd_names]
 
             if how == 'ui':
+                
+                from Pygilent.uitools import create_entry_window
+                
                 stnd_conc_dict = create_entry_window(list(unique_stnd_names), 
                                                      default_values=stnd_conc_defaults)
             else:
@@ -1007,7 +975,7 @@ class Batch:
                 self.cali_order[val].extend(list(key_rows))
             
             #make cali_stnd_df
-            self.cali_stnd_df=make_stndvals_df(df=stnd_vals_df, stnd_names=list(self.cali_order.keys()), 
+            self.cali_stnd_df=make_stndvals_df(df=stnd_vals_df, stnd_names=stnd_name, 
                                                isotopes=self.analytes['isotope_gas'].values, 
                                                cali_mode=self.cali_mode, dilutions=list(self.cali_order.keys()), 
                                                units=units)
@@ -1430,7 +1398,7 @@ class Batch:
                     
                 for iso in self.cali_stnd_df.index:
                     
-                    if iso in [ratio_iso for ratio_iso in self.internal_stnd.values()]:
+                    if self.internal_stnd.values() is not None and iso in self.internal_stnd.values():
                         continue
                     
                     X=np.array([])
