@@ -45,15 +45,27 @@ def make_stndvals_df(df, stnd_names, isotopes, cali_mode, dilutions=np.array([])
     if 'conc' in cali_mode:
         if dilutions.size==0:
             raise ValueError(f'Dilutions must be provided for {cali_mode}.')
-
         
         elements=deconstruct_isotope_gas(isotopes, 'element')
-        col_names=np.char.add(dilutions.astype(str), '_'+stnd_names[0])
-        stnd_vals_df=pd.DataFrame([], columns=col_names, index=isotopes)
+        
         vals_arr=df.loc[elements, stnd_names].values
+        
+        if len(stnd_names)> 1:
+            
+            if dilutions.size>1 | dilutions.size!=len(stnd_names):
+                raise ValueError('If using multiple standards, dilutions must be either a scalar or vector of length stnd_names')
+            
+            col_names=[]
+            for name, dilution in zip(stnd_names, dilutions):
+                col_names.append(str(dilution)+'_'+name)    
+            
+        else:
+            col_names=np.char.add(dilutions.astype(str), '_'+stnd_names[0])
+            
+        stnd_vals_df=pd.DataFrame([], columns=col_names, index=isotopes)
         stnd_vals_df.loc[:, col_names]=dilutions*vals_arr
         stnd_vals_df.insert(0, 'units', units_array)
-        
+            
     else:
         if ratio_element is None:
             raise ValueError(f'Ratio element must be provided for {cali_mode}.')
