@@ -7,6 +7,8 @@ from Pygilent.stnds import get_default_stndvals, make_stndvals_df
 import sympy as sym
 from math import gamma
 import re
+import statsmodels.api as sm
+import matplotlib.pyplot as plt
 gamma_vectorized=np.vectorize(gamma)
 ##Functions
 
@@ -684,7 +686,8 @@ class Batch:
                  calibrated_output=None, calibrated_output_se=None, cov=None, 
                  cali_stnd_df=None, curve_mdl=None, blk_order=np.array([], dtype=int), brkt_order=np.array([], dtype=int), 
                  brkt_stnd=None, cali_mode=None, internal_stnd=None, 
-                 cali_order={}, stnd_df=None, __process_inputs__=None, cali_blocks=None, bracketed=None, bracketed_se=None):
+                 cali_order={}, stnd_df=None, __process_inputs__=None, cali_blocks=None, bracketed=None, 
+                 bracketed_se=None, cps_blk_corrected=None, cps_blk_corrected_se=None, __calibrated_x__=None):
         self.run_name=run_name
         self.batch_info=batch_info
         self.total_reps=total_reps
@@ -729,7 +732,9 @@ class Batch:
         self.cali_order=cali_order
         self.stnd_df=stnd_df
         self.cali_blocks=cali_blocks
-    
+        self.cps_blk_corrected=cps_blk_corrected
+        self.cps_blk_corrected_se=cps_blk_corrected_se
+        self.__calibrated_x__=__calibrated_x__
     
     def set_blks(self, blk_order=np.array([], dtype=int), how='auto', keyword='blk', case=False):
         """Define the positions of the blanks within the batch
@@ -1351,13 +1356,12 @@ class Batch:
     def calibrate(self, omissions={}):
         #TODO write ability to remove standards from calibration
         #TODO write automatic removal of P/A standards
-        self.calibrated_output={}
-        self.calibrated_output_se={}
+
         for mode in self.mode_options:
             nan_df=self.cps_mean.copy()
             nan_df.loc[:, self.analytes['isotope_gas']]=np.nan
-            self.calibrated_output[mode]=nan_df.copy()
-            self.calibrated_output_se[mode]=nan_df.copy()
+            self.calibrated_output=nan_df.copy()
+            self.calibrated_output_se=nan_df.copy()
         
         
         if self.cali_blocks is None:
@@ -1366,12 +1370,16 @@ class Batch:
             cali_blocks=pd.unique(self.cali_blocks['cali_block'])
         
         
-            
+        #choose what to use on x axis (cps, blank corrected cps, R, or B)
         x_list=[self.cps_mean, self.cps_blk_corrected, self.cps_ratio, self.bracketed] 
         se_list=[self.cps_sd, self.cps_blk_corrected_se, self.cps_ratio_se, self.bracketed_se]   
+        x_id=['raw CPS', 'blank-corrected CPS', 'ratio CPS', 'bracketed ratio CPS']
+        
         x_idx=[x for x in range(4) if x_list[x] is not None][-1]
         
         x_df=x_list[x_idx]
+        self.__calibrated_x__=(x_df.copy(), x_id[x_idx])
+        
         se_df=se_list[x_idx]
         
         
@@ -1382,7 +1390,7 @@ class Batch:
             single_df=x_df[['sample_name', 'run_order']].copy()
             single_df.loc[:, isotopes]=x_df.loc[:, isotopes].mul(dict(self.cali_stnd_df.iloc[:, 1]))
             
-            self.calibrated_output[self.cali_mode]=single_df
+            self.calibrated_output=single_df.copy()
         
         if 'curve' in self.cali_mode:  
         
@@ -1392,9 +1400,7 @@ class Batch:
             curve_mdl_df=pd.DataFrame([], index=self.cali_stnd_df.index, columns=['fit', 'R2', 'b1', 'b1_se', 'b0', 'b0_se'])
             curve_resid_df=pd.DataFrame([])
             
-            import statsmodels.api as sm
             
-            curve_mdl_by_block=[]         
                 
             for block in cali_blocks:
                     
@@ -1484,8 +1490,8 @@ class Batch:
                                 +lm_fit.bse[0]**2)
                     
 
-                    self.calibrated_output[self.cali_mode].loc[data_idx, iso]=y_predicted
-                    self.calibrated_output_se[self.cali_mode].loc[data_idx, iso]=y_se
+                    self.calibrated_output.loc[data_idx, iso]=y_predicted
+                    self.calibrated_output_se.loc[data_idx, iso]=y_se
 
 
                     self.curve_mdl[block]=curve_mdl_df
@@ -1507,21 +1513,86 @@ class Batch:
         units_dict=dict(conc_stnd_df['units'])
         if units=='grams':
             from Pygilent.stnds import get_atomic_mass
-            elements= [deconstruct_isotope_gas(x, 'element') for x in conc_stnd_df.index]
+            
+            
+            converted_df=self.calibrated_output.copy()
             
             for iso in conc_stnd_df.index:
                 molar_mass=get_atomic_mass(deconstruct_isotope_gas(iso, 'element'))
-                self.calibrated_output[self.cali_mode].loc[:, iso]*=molar_mass
+                converted_df.loc[:, iso]*=molar_mass
         
-        return self.calibrated_output[self.cali_mode], units_dict
+        return converted_df, units_dict
+    
+    
+    def convert_to_grams(self):
+        
+        if ~np.any(self.cali_stnd_df.loc[:, 'units'].str.contains('mol')):
+            raise ValueError('Already in grams')
+        
+        from Pygilent.stnds import get_atomic_mass
+        for iso in self.cali_stnd_df.index:
+            molar_mass=get_atomic_mass(deconstruct_isotope_gas(iso, 'element'))
             
+            self.calibrated_output.loc[:, iso]*=molar_mass
+            self.calibrated_output_se.loc[:, iso]*=molar_mass
+            self.cali_stnd_df.loc[iso, list(self.cali_order.keys())]*=molar_mass
+            
+        self.cali_stnd_df.loc[:, 'units']=self.cali_stnd_df.loc[:, 'units'].str.replace('mol', 'g')
 
-    def inspect_calibration(self, isotope, omissions={}):
-            import statsmodels.api as sm
-            X=self.bracketed.loc[self.curve_resid.index, isotope].values
-            ypred=self.curve_mdl.loc[isotope, 'fit'].predict(sm.add_constant(X))
-            yresid=self.curve_resid.loc[:, isotope].values
-            y=ypred+yresid
+
+    def convert_to_moles(self):
+        
+        if np.any(self.cali_stnd_df.loc[:, 'units'].str.contains('mol')):
+            raise ValueError('Already in moles')
+        
+        from Pygilent.stnds import get_atomic_mass
+        for iso in self.cali_stnd_df.index:
+            molar_mass=get_atomic_mass(deconstruct_isotope_gas(iso, 'element'))
+            
+            self.calibrated_output.loc[:, iso]/=molar_mass
+            self.calibrated_output_se.loc[:, iso]/=molar_mass
+            self.cali_stnd_df.loc[iso, list(self.cali_order.keys())]/=molar_mass
+            
+        self.cali_stnd_df.loc[:, 'units']=self.cali_stnd_df.loc[:, 'units'].str.replace('g', 'mol')
+    
+
+    def plot_calibration(self, iso, block=0):
+            
+            mdl=self.curve_mdl[block].loc[iso, 'fit']
+
+            x_df, x_id=self.__calibrated_x__
+
+            X_pred=x_df[iso].values
+            X_pred=X_pred[~np.isnan(X_pred)]
+            X_pred=sm.add_constant(X_pred)
+            y_pred=mdl.predict(X_pred)
+
+        
+
+
+            fig, ax = plt.subplots()
+            sm.graphics.plot_fit(mdl, 1, ax=ax)
+            l1=ax.lines[0]
+            l2=ax.lines[1]
+            l1.set_label('Standards')
+            l2.set_label(f'Fit y = {mdl.params[0]:.2e} + {mdl.params[1]:.2e}x')
+            x_stnd=l2.get_xdata()
+            y_stnd=l2.get_ydata()
+            ax.plot(x_stnd, y_stnd, color='r', label=f'Fit R2={mdl.rsquared:.2f}')
+            ax.scatter(X_pred[:, 1], y_pred, color='k', marker='X', label='Predicted samples')
+            plt.title(iso)
+            plt.legend()
+            ax.set_xlabel(x_id)
+            ax.set_ylabel(self.cali_stnd_df.loc[iso, 'units'])
+            
+            plt.show()
+            
+            
+            
+            #X=self.bracketed.loc[self.curve_resid.index, isotope].values
+            #ypred=self.curve_mdl.loc[isotope, 'fit'].predict(sm.add_constant(X))
+            #yresid=self.curve_resid.loc[:, isotope].values
+            #y=ypred+yresid
             
             
 
@@ -1536,17 +1607,16 @@ class Batch:
     
 
     
-    def save_to_csv(self, path):
-        self.df.to_csv(path, index=False)
+
         
     def save_to_excel(self, path):
-        self.df.to_excel(path, index=False)
-        
-    def save_to_pickle(self, path):
-        self.df.to_pickle(path)
-        
-    def save_to_sql(self, path, table_name):
-        self.df.to_sql(table_name, path, index=False, if_exists='replace')
+        with pd.ExcelWriter(path) as writer:
+            self.calibrated_output.to_excel(writer, sheet_name='calibrated')
+            self.calibrated_output_se.to_excel(writer, sheet_name='1se')
+            self.cali_stnd_df.to_excel(writer, sheet_name='cali_stnds')
 
+        
+
+        
 
 
