@@ -1,4 +1,2 @@
-#Ignore the dist directory
-dist/
 #Ignore the build directory
 old_scripts/
