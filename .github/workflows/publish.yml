@@ -13,6 +13,7 @@ jobs:
       url: https://pypi.org/p/Pygilent
     permissions:
       id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -26,5 +27,11 @@ jobs:
       - name: Build package
         run: |
           python setup.py sdist bdist_wheel  # Could also be python -m build
+      - name: Generate and upload digital attestations
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'dist/*'
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
