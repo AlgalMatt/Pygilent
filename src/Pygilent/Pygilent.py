@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import warnings
 from Pygilent.stnds import get_default_stndvals, make_stndvals_df
 import sympy as sym
@@ -368,7 +368,7 @@ def import_batch(path=None, ui=False, stnd_df=None):
     batch_df.reset_index(drop=True, inplace=True)
     
     #Get a list of the sample names, make them into directories and put them into the main df
-    subfolder_list=[path/Path(x).name for x in batch_df["File Name"]]
+    subfolder_list=[path/PureWindowsPath(x).name for x in batch_df["File Name"]]
     batch_df['directory']=subfolder_list
 
     #Setup run info table
@@ -530,10 +530,6 @@ def import_batch(path=None, ui=False, stnd_df=None):
     return Batch(run_name, batch_info, total_reps, analytes, rep_df, cps_mean, cps_sd, det_mode, rep_numbers_df)
     
 
-    
-def add_batch_to_archive(batch, archive_df):
-    pass
-            
 
 def select_run_order(batch, run_order=np.array([], dtype=int), how='manual', keyword=None, case=False, sample_type='sample'):
     
@@ -1035,40 +1031,6 @@ class Batch:
 
     
     
-    
-    def check_cali_curve(self):
-        pass
-                
-    def initialize(self):
-        #check if the batch has correct attributes to proceed
-        if type(self.cps_mean) is not pd.core.frame.DataFrame and type(self.rep_cps) is not pd.core.frame.DataFrame:
-            raise RuntimeError('No raw data provided. Please provide raw data.')
-        elif type(self.rep_cps) is not pd.core.frame.DataFrame:
-            warnings.warn('No replicate data provided. Standard errors cannot be calculated.')
-        if type(self.timings) is not pd.core.frame.DataFrame:
-            raise RuntimeError('No timing data provided. Please provide timing data.')
-        if self.cali_mode not in ['ratio curve', 'ratio single', 'conc curve', 'conc single']:
-            raise RuntimeError('Invalid calibration mode provided. Please provide a calibration mode using set_cali_mode method.')
-        
-        if len(self.blk_order)==0:
-            warnings.warn('No blank order provided. Blanks will not be removed.')
-        
-        if len(self.brkt_order)==0:
-            if 'single' in self.cali_mode:
-                raise RuntimeError('No bracket order provided. Brackets are required for single-point calibration.')
-            else:
-                warnings.warn('No bracket order provided. Sample will not be drift-corrected.')
-
-        if len(self.cali_order)==0:
-            raise RuntimeError('No calibration standards provided.')
-        elif len(self.cali_order)==1 and 'curve' in self.cali_mode:
-            raise RuntimeError('Only one calibration standard provided. Calibration curve cannot be fit.')
-    
-    def open_replicate_editor(self):
-        pass
-    
-    
-
     
     def set_covariances(self):
         #set covariances calculating errors of ratios
