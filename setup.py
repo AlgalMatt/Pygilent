@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="Pygilent",
-    version="0.1.0",
+    version="0.1.2",
     url="https://github.com/AlgalMatt/Pygilent",
     author="Matt Dumont",
     author_email="mdumont1989@gmail.com",
